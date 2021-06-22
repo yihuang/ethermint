@@ -225,6 +225,14 @@ func startInProcess(ctx *server.Context, clientCtx client.Context, appCreator ty
 	var apiSrv *api.Server
 	config := config.GetConfig(ctx.Viper)
 
+	// Add the tx service to the gRPC router. We only need to register this
+	// service if API or gRPC is enabled, and avoid doing so in the general
+	// case, because it spawns a new local tendermint RPC client.
+	if config.API.Enable || config.GRPC.Enable {
+		app.RegisterTxService(clientCtx)
+		app.RegisterTendermintService(clientCtx)
+	}
+
 	var grpcSrv *grpc.Server
 	if config.GRPC.Enable {
 		grpcSrv, err = servergrpc.StartGRPCServer(clientCtx, app, config.GRPC.Address)
