@@ -11,7 +11,7 @@ require (
 	github.com/bugsnag/bugsnag-go v2.1.0+incompatible // indirect
 	github.com/bugsnag/panicwrap v1.3.2 // indirect
 	github.com/cespare/cp v1.1.1 // indirect
-	github.com/cosmos/cosmos-sdk v0.42.4
+	github.com/cosmos/cosmos-sdk v0.42.6
 	github.com/cosmos/go-bip39 v1.0.0
 	github.com/deckarep/golang-set v1.7.1 // indirect
 	github.com/desertbit/timer v0.0.0-20180107155436-c41aec40b27f // indirect
@@ -40,13 +40,12 @@ require (
 	github.com/spf13/viper v1.7.1
 	github.com/status-im/keycard-go v0.0.0-20200402102358-957c09536969
 	github.com/stretchr/testify v1.7.0
-	github.com/tendermint/tendermint v0.34.10
+	github.com/tendermint/tendermint v0.34.11
 	github.com/tendermint/tm-db v0.6.4
 	github.com/tyler-smith/go-bip39 v1.1.0
 	github.com/xlab/closer v0.0.0-20190328110542-03326addb7c2
 	github.com/xlab/suplog v1.3.0
 	golang.org/x/crypto v0.0.0-20210513164829-c07d793c2f9a
-	golang.org/x/sys v0.0.0-20210503173754-0981d6026fa6 // indirect
 	google.golang.org/genproto v0.0.0-20210513213006-bf773b8c8384
 	google.golang.org/grpc v1.37.1
 	gopkg.in/yaml.v2 v2.4.0
