@@ -36,8 +36,8 @@ require (
 	github.com/regen-network/cosmos-proto v0.3.1
 	github.com/rs/cors v1.7.0
 	github.com/spf13/cast v1.3.1
-	github.com/spf13/cobra v1.1.3
-	github.com/spf13/viper v1.7.1
+	github.com/spf13/cobra v1.2.1
+	github.com/spf13/viper v1.8.1
 	github.com/status-im/keycard-go v0.0.0-20200402102358-957c09536969
 	github.com/stretchr/testify v1.7.0
 	github.com/tendermint/tendermint v0.34.10
@@ -46,11 +46,9 @@ require (
 	github.com/xlab/closer v0.0.0-20190328110542-03326addb7c2
 	github.com/xlab/suplog v1.3.0
 	golang.org/x/crypto v0.0.0-20210513164829-c07d793c2f9a
-	golang.org/x/sys v0.0.0-20210503173754-0981d6026fa6 // indirect
-	google.golang.org/genproto v0.0.0-20210513213006-bf773b8c8384
-	google.golang.org/grpc v1.37.1
+	google.golang.org/genproto v0.0.0-20210602131652-f16073e35f0c
+	google.golang.org/grpc v1.38.0
 	gopkg.in/yaml.v2 v2.4.0
-	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 	nhooyr.io/websocket v1.8.7 // indirect
 )
 
