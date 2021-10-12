@@ -18,7 +18,7 @@ func (suite AnteTestSuite) TestAnteHandler() {
 	suite.Require().NoError(acc.SetSequence(1))
 	suite.app.AccountKeeper.SetAccount(suite.ctx, acc)
 
-	suite.app.EvmKeeper.AddBalance(addr, big.NewInt(10000000000))
+	suite.vmdb.AddBalance(addr, big.NewInt(10000000000))
 
 	testCases := []struct {
 		name      string

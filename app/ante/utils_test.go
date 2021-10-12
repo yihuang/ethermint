@@ -5,6 +5,7 @@ import (
 	"time"
 
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 
 	"github.com/stretchr/testify/suite"
 
@@ -36,6 +37,7 @@ type AnteTestSuite struct {
 	clientCtx   client.Context
 	anteHandler sdk.AnteHandler
 	ethSigner   ethtypes.Signer
+	vmdb        vm.StateDB
 }
 
 func (suite *AnteTestSuite) SetupTest() {
@@ -45,6 +47,7 @@ func (suite *AnteTestSuite) SetupTest() {
 	suite.ctx = suite.ctx.WithMinGasPrices(sdk.NewDecCoins(sdk.NewDecCoin(evmtypes.DefaultEVMDenom, sdk.OneInt())))
 	suite.ctx = suite.ctx.WithBlockGasMeter(sdk.NewGasMeter(1000000000000000000))
 	suite.app.EvmKeeper.WithChainID(suite.ctx)
+	suite.vmdb = evmtypes.NewStateDB(suite.ctx, suite.app.EvmKeeper)
 
 	infCtx := suite.ctx.WithGasMeter(sdk.NewInfiniteGasMeter())
 	suite.app.AccountKeeper.SetParams(infCtx, authtypes.DefaultParams())

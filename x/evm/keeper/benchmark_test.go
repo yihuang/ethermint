@@ -12,7 +12,6 @@ import (
 
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	ethermint "github.com/tharsis/ethermint/types"
-	"github.com/tharsis/ethermint/x/evm/keeper"
 	"github.com/tharsis/ethermint/x/evm/types"
 )
 
@@ -65,7 +64,7 @@ func BenchmarkTokenTransfer(b *testing.B) {
 	DoBenchmark(b, func(suite *KeeperTestSuite, contract common.Address) *types.MsgEthereumTx {
 		input, err := ContractABI.Pack("transfer", common.HexToAddress("0x378c50D9264C63F3F92B806d4ee56E9D86FfB3Ec"), big.NewInt(1000))
 		require.NoError(b, err)
-		nonce := suite.app.EvmKeeper.GetNonce(suite.address)
+		nonce := suite.vmdb.GetNonce(suite.address)
 		return types.NewTx(suite.app.EvmKeeper.ChainID(), nonce, &contract, big.NewInt(0), 410000, big.NewInt(1), input, nil)
 	})
 }
@@ -74,7 +73,7 @@ func BenchmarkEmitLogs(b *testing.B) {
 	DoBenchmark(b, func(suite *KeeperTestSuite, contract common.Address) *types.MsgEthereumTx {
 		input, err := ContractABI.Pack("benchmarkLogs", big.NewInt(1000))
 		require.NoError(b, err)
-		nonce := suite.app.EvmKeeper.GetNonce(suite.address)
+		nonce := suite.vmdb.GetNonce(suite.address)
 		return types.NewTx(suite.app.EvmKeeper.ChainID(), nonce, &contract, big.NewInt(0), 4100000, big.NewInt(1), input, nil)
 	})
 }
@@ -83,7 +82,7 @@ func BenchmarkTokenTransferFrom(b *testing.B) {
 	DoBenchmark(b, func(suite *KeeperTestSuite, contract common.Address) *types.MsgEthereumTx {
 		input, err := ContractABI.Pack("transferFrom", suite.address, common.HexToAddress("0x378c50D9264C63F3F92B806d4ee56E9D86FfB3Ec"), big.NewInt(0))
 		require.NoError(b, err)
-		nonce := suite.app.EvmKeeper.GetNonce(suite.address)
+		nonce := suite.vmdb.GetNonce(suite.address)
 		return types.NewTx(suite.app.EvmKeeper.ChainID(), nonce, &contract, big.NewInt(0), 410000, big.NewInt(1), input, nil)
 	})
 }
@@ -92,7 +91,7 @@ func BenchmarkTokenMint(b *testing.B) {
 	DoBenchmark(b, func(suite *KeeperTestSuite, contract common.Address) *types.MsgEthereumTx {
 		input, err := ContractABI.Pack("mint", common.HexToAddress("0x378c50D9264C63F3F92B806d4ee56E9D86FfB3Ec"), big.NewInt(1000))
 		require.NoError(b, err)
-		nonce := suite.app.EvmKeeper.GetNonce(suite.address)
+		nonce := suite.vmdb.GetNonce(suite.address)
 		return types.NewTx(suite.app.EvmKeeper.ChainID(), nonce, &contract, big.NewInt(0), 410000, big.NewInt(1), input, nil)
 	})
 }
@@ -106,8 +105,7 @@ func DoBenchmarkDeepContextStack(b *testing.B, depth int) {
 
 	transientKey := suite.app.GetTKey(types.TransientKey)
 
-	var stack keeper.ContextStack
-	stack.Reset(suite.ctx)
+	stack := types.NewContextStack(suite.ctx)
 
 	for i := 0; i < depth; i++ {
 		stack.Snapshot()

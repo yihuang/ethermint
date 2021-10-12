@@ -110,8 +110,8 @@ func (suite *KeeperTestSuite) TestCheckSenderBalance() {
 		},
 	}
 
-	suite.app.EvmKeeper.AddBalance(suite.address, hundredInt.BigInt())
-	balance := suite.app.EvmKeeper.GetBalance(suite.address)
+	suite.vmdb.AddBalance(suite.address, hundredInt.BigInt())
+	balance := suite.vmdb.GetBalance(suite.address)
 	suite.Require().Equal(balance, hundredInt.BigInt())
 
 	for i, tc := range testCases {
@@ -132,7 +132,7 @@ func (suite *KeeperTestSuite) TestCheckSenderBalance() {
 			txData, _ := evmtypes.UnpackTxData(tx.Data)
 
 			err := evmkeeper.CheckSenderBalance(
-				suite.app.EvmKeeper.Ctx(),
+				suite.ctx,
 				suite.app.BankKeeper,
 				suite.address[:],
 				txData,
@@ -218,8 +218,8 @@ func (suite *KeeperTestSuite) TestDeductTxCostsFromUserBalance() {
 	for i, tc := range testCases {
 		suite.Run(tc.name, func() {
 			suite.SetupTest()
-			suite.app.EvmKeeper.AddBalance(suite.address, hundredInt.BigInt())
-			balance := suite.app.EvmKeeper.GetBalance(suite.address)
+			suite.app.EvmKeeper.AddBalance(suite.ctx, suite.address, hundredInt.BigInt())
+			balance := suite.app.EvmKeeper.GetBalance(suite.ctx, suite.address)
 			suite.Require().Equal(balance, hundredInt.BigInt())
 
 			var amount, gasPrice *big.Int
@@ -236,7 +236,7 @@ func (suite *KeeperTestSuite) TestDeductTxCostsFromUserBalance() {
 			txData, _ := evmtypes.UnpackTxData(tx.Data)
 
 			fees, err := suite.app.EvmKeeper.DeductTxCostsFromUserBalance(
-				suite.app.EvmKeeper.Ctx(),
+				suite.ctx,
 				*tx,
 				txData,
 				evmtypes.DefaultEVMDenom,

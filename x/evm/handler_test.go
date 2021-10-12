@@ -9,6 +9,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
@@ -18,6 +19,7 @@ import (
 	"github.com/tharsis/ethermint/crypto/ethsecp256k1"
 	"github.com/tharsis/ethermint/tests"
 	"github.com/tharsis/ethermint/x/evm"
+	evmtypes "github.com/tharsis/ethermint/x/evm/types"
 
 	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
 )
@@ -35,6 +37,8 @@ type EvmTestSuite struct {
 	ethSigner ethtypes.Signer
 	from      common.Address
 	to        sdk.AccAddress
+
+	vmdb vm.StateDB
 }
 
 func (suite *EvmTestSuite) SetupTest() {
@@ -42,7 +46,7 @@ func (suite *EvmTestSuite) SetupTest() {
 
 	suite.app = app.Setup(checkTx)
 	suite.ctx = suite.app.BaseApp.NewContext(checkTx, tmproto.Header{Height: 1, ChainID: "ethermint_9000-1", Time: time.Now().UTC()})
-	suite.app.EvmKeeper.WithContext(suite.ctx)
+	suite.vmdb = evmtypes.NewStateDB(suite.ctx, suite.app.EvmKeeper)
 	suite.handler = evm.NewHandler(suite.app.EvmKeeper)
 	suite.codec = suite.app.AppCodec()
 	suite.chainID = suite.app.EvmKeeper.ChainID()

@@ -14,6 +14,7 @@ import (
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 
 	"github.com/tharsis/ethermint/tests"
+	"github.com/tharsis/ethermint/x/evm/types"
 )
 
 func (suite *KeeperTestSuite) TestGetHashFn() {
@@ -32,7 +33,7 @@ func (suite *KeeperTestSuite) TestGetHashFn() {
 			uint64(suite.ctx.BlockHeight()),
 			func() {
 				suite.ctx = suite.ctx.WithHeaderHash(tmhash.Sum([]byte("header")))
-				suite.app.EvmKeeper.WithContext(suite.ctx)
+				suite.vmdb = types.NewStateDB(suite.ctx, suite.app.EvmKeeper)
 			},
 			common.BytesToHash(tmhash.Sum([]byte("header"))),
 		},
@@ -43,7 +44,7 @@ func (suite *KeeperTestSuite) TestGetHashFn() {
 				header := tmproto.Header{}
 				header.Height = suite.ctx.BlockHeight()
 				suite.ctx = suite.ctx.WithBlockHeader(header)
-				suite.app.EvmKeeper.WithContext(suite.ctx)
+				suite.vmdb = types.NewStateDB(suite.ctx, suite.app.EvmKeeper)
 			},
 			common.Hash{},
 		},
@@ -52,7 +53,7 @@ func (suite *KeeperTestSuite) TestGetHashFn() {
 			uint64(suite.ctx.BlockHeight()),
 			func() {
 				suite.ctx = suite.ctx.WithBlockHeader(header)
-				suite.app.EvmKeeper.WithContext(suite.ctx)
+				suite.vmdb = types.NewStateDB(suite.ctx, suite.app.EvmKeeper)
 			},
 			common.BytesToHash(hash),
 		},
@@ -61,7 +62,7 @@ func (suite *KeeperTestSuite) TestGetHashFn() {
 			1,
 			func() {
 				suite.ctx = suite.ctx.WithBlockHeight(10)
-				suite.app.EvmKeeper.WithContext(suite.ctx)
+				suite.vmdb = types.NewStateDB(suite.ctx, suite.app.EvmKeeper)
 			},
 			common.Hash{},
 		},
@@ -71,7 +72,7 @@ func (suite *KeeperTestSuite) TestGetHashFn() {
 			func() {
 				suite.app.StakingKeeper.SetHistoricalInfo(suite.ctx, 1, &stakingtypes.HistoricalInfo{})
 				suite.ctx = suite.ctx.WithBlockHeight(10)
-				suite.app.EvmKeeper.WithContext(suite.ctx)
+				suite.vmdb = types.NewStateDB(suite.ctx, suite.app.EvmKeeper)
 			},
 			common.Hash{},
 		},
@@ -84,7 +85,7 @@ func (suite *KeeperTestSuite) TestGetHashFn() {
 				}
 				suite.app.StakingKeeper.SetHistoricalInfo(suite.ctx, 1, histInfo)
 				suite.ctx = suite.ctx.WithBlockHeight(10)
-				suite.app.EvmKeeper.WithContext(suite.ctx)
+				suite.vmdb = types.NewStateDB(suite.ctx, suite.app.EvmKeeper)
 			},
 			common.BytesToHash(hash),
 		},
@@ -102,7 +103,7 @@ func (suite *KeeperTestSuite) TestGetHashFn() {
 
 			tc.malleate()
 
-			hash := suite.app.EvmKeeper.GetHashFn()(tc.height)
+			hash := suite.app.EvmKeeper.GetHashFn(suite.ctx)(tc.height)
 			suite.Require().Equal(tc.expHash, hash)
 		})
 	}
@@ -122,7 +123,7 @@ func (suite *KeeperTestSuite) TestGetCoinbaseAddress() {
 				header := suite.ctx.BlockHeader()
 				header.ProposerAddress = []byte{}
 				suite.ctx = suite.ctx.WithBlockHeader(header)
-				suite.app.EvmKeeper.WithContext(suite.ctx)
+				suite.vmdb = types.NewStateDB(suite.ctx, suite.app.EvmKeeper)
 			},
 			false,
 		},
@@ -146,11 +147,11 @@ func (suite *KeeperTestSuite) TestGetCoinbaseAddress() {
 				header := suite.ctx.BlockHeader()
 				header.ProposerAddress = valConsAddr.Bytes()
 				suite.ctx = suite.ctx.WithBlockHeader(header)
+				suite.vmdb = types.NewStateDB(suite.ctx, suite.app.EvmKeeper)
 
 				_, found := suite.app.StakingKeeper.GetValidatorByConsAddr(suite.ctx, valConsAddr.Bytes())
 				suite.Require().True(found)
 
-				suite.app.EvmKeeper.WithContext(suite.ctx)
 				suite.Require().NotEmpty(suite.ctx.BlockHeader().ProposerAddress)
 			},
 			true,

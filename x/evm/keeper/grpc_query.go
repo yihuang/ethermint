@@ -48,12 +48,10 @@ func (k Keeper) Account(c context.Context, req *types.QueryAccountRequest) (*typ
 	addr := common.HexToAddress(req.Address)
 
 	ctx := sdk.UnwrapSDKContext(c)
-	k.WithContext(ctx)
-
 	return &types.QueryAccountResponse{
-		Balance:  k.GetBalance(addr).String(),
-		CodeHash: k.GetCodeHash(addr).Hex(),
-		Nonce:    k.GetNonce(addr),
+		Balance:  k.GetBalance(ctx, addr).String(),
+		CodeHash: k.GetCodeHash(ctx, addr).Hex(),
+		Nonce:    k.GetNonce(ctx, addr),
 	}, nil
 }
 
@@ -69,7 +67,6 @@ func (k Keeper) CosmosAccount(c context.Context, req *types.QueryCosmosAccountRe
 	}
 
 	ctx := sdk.UnwrapSDKContext(c)
-	k.WithContext(ctx)
 
 	ethAddr := common.HexToAddress(req.Address)
 	cosmosAddr := sdk.AccAddress(ethAddr.Bytes())
@@ -100,7 +97,6 @@ func (k Keeper) ValidatorAccount(c context.Context, req *types.QueryValidatorAcc
 	}
 
 	ctx := sdk.UnwrapSDKContext(c)
-	k.WithContext(ctx)
 
 	validator, found := k.stakingKeeper.GetValidatorByConsAddr(ctx, consAddr)
 	if !found {
@@ -136,9 +132,8 @@ func (k Keeper) Balance(c context.Context, req *types.QueryBalanceRequest) (*typ
 	}
 
 	ctx := sdk.UnwrapSDKContext(c)
-	k.WithContext(ctx)
 
-	balanceInt := k.GetBalance(common.HexToAddress(req.Address))
+	balanceInt := k.GetBalance(ctx, common.HexToAddress(req.Address))
 
 	return &types.QueryBalanceResponse{
 		Balance: balanceInt.String(),
@@ -159,12 +154,11 @@ func (k Keeper) Storage(c context.Context, req *types.QueryStorageRequest) (*typ
 	}
 
 	ctx := sdk.UnwrapSDKContext(c)
-	k.WithContext(ctx)
 
 	address := common.HexToAddress(req.Address)
 	key := common.HexToHash(req.Key)
 
-	state := k.GetState(address, key)
+	state := k.GetState(ctx, address, key)
 	stateHex := state.Hex()
 
 	return &types.QueryStorageResponse{
@@ -186,10 +180,9 @@ func (k Keeper) Code(c context.Context, req *types.QueryCodeRequest) (*types.Que
 	}
 
 	ctx := sdk.UnwrapSDKContext(c)
-	k.WithContext(ctx)
 
 	address := common.HexToAddress(req.Address)
-	code := k.GetCode(address)
+	code := k.GetCode(ctx, address)
 
 	return &types.QueryCodeResponse{
 		Code: code,
@@ -213,7 +206,6 @@ func (k Keeper) EthCall(c context.Context, req *types.EthCallRequest) (*types.Ms
 	}
 
 	ctx := sdk.UnwrapSDKContext(c)
-	k.WithContext(ctx)
 
 	var args types.CallArgs
 	err := json.Unmarshal(req.Args, &args)
@@ -223,7 +215,8 @@ func (k Keeper) EthCall(c context.Context, req *types.EthCallRequest) (*types.Ms
 
 	msg := args.ToMessage(req.GasCap)
 
-	res, err := k.ApplyMessage(msg, nil, false)
+	// pass false to not commit StateDB
+	res, err := k.ApplyMessage(ctx, msg, nil, false)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
@@ -238,7 +231,6 @@ func (k Keeper) EstimateGas(c context.Context, req *types.EthCallRequest) (*type
 	}
 
 	ctx := sdk.UnwrapSDKContext(c)
-	k.WithContext(ctx)
 
 	if req.GasCap < ethparams.TxGas {
 		return nil, status.Error(codes.InvalidArgument, "gas cap cannot be lower than 21,000")
@@ -287,12 +279,10 @@ func (k Keeper) EstimateGas(c context.Context, req *types.EthCallRequest) (*type
 	executable := func(gas uint64) (bool, *types.MsgEthereumTxResponse, error) {
 		args.Gas = (*hexutil.Uint64)(&gas)
 
-		// Reset to the initial context
-		k.WithContext(ctx)
-
 		msg := args.ToMessage(req.GasCap)
 
-		rsp, err := k.ApplyMessageWithConfig(msg, nil, false, cfg)
+		// pass false to not commit StateDB
+		rsp, err := k.ApplyMessageWithConfig(ctx, msg, nil, false, cfg)
 		if err != nil {
 			if errors.Is(stacktrace.RootCause(err), core.ErrIntrinsicGas) {
 				return true, nil, nil // Special case, raise gas limit
@@ -340,7 +330,6 @@ func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*typ
 	ctx = ctx.WithBlockHeight(req.BlockNumber)
 	ctx = ctx.WithBlockTime(req.BlockTime)
 	ctx = ctx.WithHeaderHash(common.Hex2Bytes(req.BlockHash))
-	k.WithContext(ctx)
 
 	params := k.GetParams(ctx)
 	ethCfg := params.ChainConfig.EthereumConfig(k.eip155ChainID)
@@ -352,10 +341,10 @@ func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*typ
 		if err != nil {
 			continue
 		}
-		k.SetTxHashTransient(ethTx.Hash())
-		k.SetTxIndexTransient(uint64(i))
+		k.SetTxHashTransient(ctx, ethTx.Hash())
+		k.SetTxIndexTransient(ctx, uint64(i))
 
-		_, err = k.ApplyMessage(msg, types.NewNoOpTracer(), true)
+		_, err = k.ApplyMessage(ctx, msg, types.NewNoOpTracer(), true)
 		if err != nil {
 			continue
 		}
@@ -394,7 +383,6 @@ func (k Keeper) TraceBlock(c context.Context, req *types.QueryTraceBlockRequest)
 	ctx = ctx.WithBlockHeight(req.BlockNumber)
 	ctx = ctx.WithBlockTime(req.BlockTime)
 	ctx = ctx.WithHeaderHash(common.Hex2Bytes(req.BlockHash))
-	k.WithContext(ctx)
 
 	params := k.GetParams(ctx)
 	ethCfg := params.ChainConfig.EthereumConfig(k.eip155ChainID)
@@ -487,10 +475,10 @@ func (k *Keeper) traceTx(
 		tracer = types.NewTracer(types.TracerStruct, msg, ethCfg, ctx.BlockHeight(), true)
 	}
 
-	k.SetTxHashTransient(tx.Hash())
-	k.SetTxIndexTransient(txIndex)
+	k.SetTxHashTransient(ctx, tx.Hash())
+	k.SetTxIndexTransient(ctx, txIndex)
 
-	res, err := k.ApplyMessage(msg, tracer, true)
+	res, err := k.ApplyMessage(ctx, msg, tracer, true)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}

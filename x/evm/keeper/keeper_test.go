@@ -72,6 +72,7 @@ type KeeperTestSuite struct {
 	queryClient types.QueryClient
 	address     common.Address
 	consAddress sdk.ConsAddress
+	vmdb        *types.StateDB
 
 	// for generate test tx
 	clientCtx client.Context
@@ -120,7 +121,7 @@ func (suite *KeeperTestSuite) DoSetupTest(t require.TestingT) {
 		ConsensusHash:      tmhash.Sum([]byte("consensus")),
 		LastResultsHash:    tmhash.Sum([]byte("last_result")),
 	})
-	suite.app.EvmKeeper.WithContext(suite.ctx)
+	suite.vmdb = types.NewStateDB(suite.ctx, suite.app.EvmKeeper)
 
 	queryHelper := baseapp.NewQueryServerTestHelper(suite.ctx, suite.app.InterfaceRegistry())
 	types.RegisterQueryServer(queryHelper, suite.app.EvmKeeper)
@@ -168,7 +169,7 @@ func (suite *KeeperTestSuite) Commit() {
 
 	// update ctx
 	suite.ctx = suite.app.BaseApp.NewContext(false, header)
-	suite.app.EvmKeeper.WithContext(suite.ctx)
+	suite.vmdb = types.NewStateDB(suite.ctx, suite.app.EvmKeeper)
 
 	queryHelper := baseapp.NewQueryServerTestHelper(suite.ctx, suite.app.InterfaceRegistry())
 	types.RegisterQueryServer(queryHelper, suite.app.EvmKeeper)
@@ -196,7 +197,7 @@ func (suite *KeeperTestSuite) DeployTestContract(t require.TestingT, owner commo
 	})
 	require.NoError(t, err)
 
-	nonce := suite.app.EvmKeeper.GetNonce(suite.address)
+	nonce := suite.vmdb.GetNonce(suite.address)
 	erc20DeployTx := types.NewTxContract(
 		chainID,
 		nonce,
@@ -206,6 +207,7 @@ func (suite *KeeperTestSuite) DeployTestContract(t require.TestingT, owner commo
 		data,    // input
 		nil,     // accesses
 	)
+
 	erc20DeployTx.From = suite.address.Hex()
 	err = erc20DeployTx.Sign(ethtypes.LatestSignerForChainID(chainID), suite.signer)
 	require.NoError(t, err)
@@ -229,7 +231,7 @@ func (suite *KeeperTestSuite) TransferERC20Token(t require.TestingT, contractAdd
 	})
 	require.NoError(t, err)
 
-	nonce := suite.app.EvmKeeper.GetNonce(suite.address)
+	nonce := suite.vmdb.GetNonce(suite.address)
 	ercTransferTx := types.NewTx(
 		chainID,
 		nonce,
