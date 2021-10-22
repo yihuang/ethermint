@@ -223,20 +223,7 @@ func (k Keeper) EthCall(c context.Context, req *types.EthCallRequest) (*types.Ms
 
 	msg := args.ToMessage(req.GasCap)
 
-	params := k.GetParams(ctx)
-	ethCfg := params.ChainConfig.EthereumConfig(k.eip155ChainID)
-
-	coinbase, err := k.GetCoinbaseAddress(ctx)
-	if err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
-	}
-
-	tracer := types.NewTracer(k.tracer, msg, ethCfg, k.Ctx().BlockHeight(), k.debug)
-	evm := k.NewEVM(msg, ethCfg, params, coinbase, tracer)
-
-	// pass true means execute in query mode, which don't do actual gas refund.
-	res, err := k.ApplyMessage(evm, msg, ethCfg, true)
-	k.ctxStack.RevertAll()
+	res, err := k.ApplyMessage(msg, nil, false)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
@@ -291,12 +278,9 @@ func (k Keeper) EstimateGas(c context.Context, req *types.EthCallRequest) (*type
 	}
 	cap = hi
 
-	params := k.GetParams(ctx)
-	ethCfg := params.ChainConfig.EthereumConfig(k.eip155ChainID)
-
-	coinbase, err := k.GetCoinbaseAddress(ctx)
+	cfg, err := k.EVMConfig(ctx)
 	if err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
+		return nil, status.Error(codes.Internal, "failed to load evm config")
 	}
 
 	// Create a helper to check if a gas allowance results in an executable transaction
@@ -308,13 +292,7 @@ func (k Keeper) EstimateGas(c context.Context, req *types.EthCallRequest) (*type
 
 		msg := args.ToMessage(req.GasCap)
 
-		tracer := types.NewTracer(k.tracer, msg, ethCfg, k.Ctx().BlockHeight(), k.debug)
-		evm := k.NewEVM(msg, ethCfg, params, coinbase, tracer)
-		// pass true means execute in query mode, which don't do actual gas refund.
-		rsp, err := k.ApplyMessage(evm, msg, ethCfg, true)
-
-		k.ctxStack.RevertAll()
-
+		rsp, err := k.ApplyMessageWithConfig(msg, nil, false, cfg)
 		if err != nil {
 			if errors.Is(stacktrace.RootCause(err), core.ErrIntrinsicGas) {
 				return true, nil, nil // Special case, raise gas limit
@@ -364,11 +342,6 @@ func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*typ
 	ctx = ctx.WithHeaderHash(common.Hex2Bytes(req.BlockHash))
 	k.WithContext(ctx)
 
-	coinbase, err := k.GetCoinbaseAddress(ctx)
-	if err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
-	}
-
 	params := k.GetParams(ctx)
 	ethCfg := params.ChainConfig.EthereumConfig(k.eip155ChainID)
 	signer := ethtypes.MakeSigner(ethCfg, big.NewInt(ctx.BlockHeight()))
@@ -379,18 +352,17 @@ func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*typ
 		if err != nil {
 			continue
 		}
-		evm := k.NewEVM(msg, ethCfg, params, coinbase, types.NewNoOpTracer())
 		k.SetTxHashTransient(ethTx.Hash())
 		k.SetTxIndexTransient(uint64(i))
 
-		_, err = k.ApplyMessage(evm, msg, ethCfg, true)
+		_, err = k.ApplyMessage(msg, types.NewNoOpTracer(), true)
 		if err != nil {
 			continue
 		}
 	}
 
 	tx := req.Msg.AsTransaction()
-	result, err := k.traceTx(ctx, coinbase, signer, req.TxIndex, params, ethCfg, tx, req.TraceConfig)
+	result, err := k.traceTx(ctx, signer, req.TxIndex, ethCfg, tx, req.TraceConfig)
 	if err != nil {
 		// error will be returned with detail status from traceTx
 		return nil, err
@@ -431,15 +403,10 @@ func (k Keeper) TraceBlock(c context.Context, req *types.QueryTraceBlockRequest)
 	txsLength := len(req.Txs)
 	results := make([]*types.TxTraceResult, 0, txsLength)
 
-	coinbase, err := k.GetCoinbaseAddress(ctx)
-	if err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
-	}
-
 	for i, tx := range req.Txs {
 		result := types.TxTraceResult{}
 		ethTx := tx.AsTransaction()
-		traceResult, err := k.traceTx(ctx, coinbase, signer, uint64(i), params, ethCfg, ethTx, req.TraceConfig)
+		traceResult, err := k.traceTx(ctx, signer, uint64(i), ethCfg, ethTx, req.TraceConfig)
 		if err != nil {
 			result.Error = err.Error()
 			continue
@@ -460,10 +427,8 @@ func (k Keeper) TraceBlock(c context.Context, req *types.QueryTraceBlockRequest)
 
 func (k *Keeper) traceTx(
 	ctx sdk.Context,
-	coinbase common.Address,
 	signer ethtypes.Signer,
 	txIndex uint64,
-	params types.Params,
 	ethCfg *ethparams.ChainConfig,
 	tx *ethtypes.Transaction,
 	traceConfig *types.TraceConfig,
@@ -522,12 +487,10 @@ func (k *Keeper) traceTx(
 		tracer = types.NewTracer(types.TracerStruct, msg, ethCfg, ctx.BlockHeight(), true)
 	}
 
-	evm := k.NewEVM(msg, ethCfg, params, coinbase, tracer)
-
 	k.SetTxHashTransient(tx.Hash())
 	k.SetTxIndexTransient(txIndex)
 
-	res, err := k.ApplyMessage(evm, msg, ethCfg, true)
+	res, err := k.ApplyMessage(msg, tracer, true)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}

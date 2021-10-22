@@ -153,7 +153,7 @@ func BenchmarkApplyTransactionWithLegacyTx(b *testing.B) {
 	}
 }
 
-func BenchmarkApplyNativeMessage(b *testing.B) {
+func BenchmarkApplyMessage(b *testing.B) {
 	suite := KeeperTestSuite{}
 	suite.DoSetupTest(b)
 
@@ -178,7 +178,7 @@ func BenchmarkApplyNativeMessage(b *testing.B) {
 		require.NoError(b, err)
 
 		b.StartTimer()
-		resp, err := suite.app.EvmKeeper.ApplyNativeMessage(m)
+		resp, err := suite.app.EvmKeeper.ApplyMessage(m, nil, true)
 		b.StopTimer()
 
 		require.NoError(b, err)
@@ -186,7 +186,7 @@ func BenchmarkApplyNativeMessage(b *testing.B) {
 	}
 }
 
-func BenchmarkApplyNativeMessageWithLegacyTx(b *testing.B) {
+func BenchmarkApplyMessageWithLegacyTx(b *testing.B) {
 	suite := KeeperTestSuite{}
 	suite.DoSetupTest(b)
 
@@ -211,7 +211,7 @@ func BenchmarkApplyNativeMessageWithLegacyTx(b *testing.B) {
 		require.NoError(b, err)
 
 		b.StartTimer()
-		resp, err := suite.app.EvmKeeper.ApplyNativeMessage(m)
+		resp, err := suite.app.EvmKeeper.ApplyMessage(m, nil, true)
 		b.StopTimer()
 
 		require.NoError(b, err)
