@@ -371,6 +371,22 @@ func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*typ
 	signer := ethtypes.MakeSigner(ethCfg, big.NewInt(ctx.BlockHeight()))
 	tx := req.Msg.AsTransaction()
 
+	for i, tx := range req.Predecessors {
+		ethTx := tx.AsTransaction()
+		msg, err := ethTx.AsMessage(signer)
+		if err != nil {
+			continue
+		}
+		evm := k.NewEVM(msg, ethCfg, params, coinbase, types.NewNoOpTracer())
+		k.SetTxHashTransient(ethTx.Hash())
+		k.SetTxIndexTransient(uint64(i))
+
+		_, err = k.ApplyMessage(evm, msg, ethCfg, true)
+		if err != nil {
+			continue
+		}
+	}
+
 	result, err := k.traceTx(ctx, coinbase, signer, req.TxIndex, params, ethCfg, tx, req.TraceConfig)
 	if err != nil {
 		return nil, err

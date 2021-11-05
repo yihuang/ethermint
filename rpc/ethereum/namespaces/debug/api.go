@@ -77,6 +77,28 @@ func (a *API) TraceTransaction(hash common.Hash, config *evmtypes.TraceConfig) (
 		return nil, errors.New("genesis is not traceable")
 	}
 
+	blk, err := a.backend.GetTendermintBlockByNumber(rpctypes.BlockNumber(transaction.Height))
+	if err != nil {
+		a.logger.Debug("block not found", "height", transaction.Height)
+		return nil, err
+	}
+
+	predecessors := []*evmtypes.MsgEthereumTx{}
+	for _, txBz := range blk.Block.Txs[:transaction.Index] {
+		tx, err := a.clientCtx.TxConfig.TxDecoder()(txBz)
+		if err != nil {
+			a.logger.Debug("failed to decode transaction in block", "height", blk.Block.Height, "error", err.Error())
+			continue
+		}
+		msg := tx.GetMsgs()[0]
+		ethMsg, ok := msg.(*evmtypes.MsgEthereumTx)
+		if !ok {
+			continue
+		}
+
+		predecessors = append(predecessors, ethMsg)
+	}
+
 	tx, err := a.clientCtx.TxConfig.TxDecoder()(transaction.Tx)
 	if err != nil {
 		a.logger.Debug("tx not found", "hash", hash)
@@ -90,8 +112,9 @@ func (a *API) TraceTransaction(hash common.Hash, config *evmtypes.TraceConfig) (
 	}
 
 	traceTxRequest := evmtypes.QueryTraceTxRequest{
-		Msg:     ethMessage,
-		TxIndex: uint64(transaction.Index),
+		Msg:          ethMessage,
+		TxIndex:      uint64(transaction.Index),
+		Predecessors: predecessors,
 	}
 
 	if config != nil {
