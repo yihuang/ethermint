@@ -24,6 +24,7 @@ import (
 	ethparams "github.com/ethereum/go-ethereum/params"
 
 	ethermint "github.com/tharsis/ethermint/types"
+	"github.com/tharsis/ethermint/x/evm/statedb"
 	"github.com/tharsis/ethermint/x/evm/types"
 )
 
@@ -48,10 +49,14 @@ func (k Keeper) Account(c context.Context, req *types.QueryAccountRequest) (*typ
 	addr := common.HexToAddress(req.Address)
 
 	ctx := sdk.UnwrapSDKContext(c)
+	acct, err := k.GetAccountOrEmpty(ctx, addr)
+	if err != nil {
+		return nil, err
+	}
 	return &types.QueryAccountResponse{
-		Balance:  k.GetBalance(ctx, addr).String(),
-		CodeHash: k.GetCodeHash(ctx, addr).Hex(),
-		Nonce:    k.GetNonce(ctx, addr),
+		Balance:  acct.Balance.String(),
+		CodeHash: hexutil.Encode(acct.CodeHash),
+		Nonce:    acct.Nonce,
 	}, nil
 }
 
@@ -182,7 +187,11 @@ func (k Keeper) Code(c context.Context, req *types.QueryCodeRequest) (*types.Que
 	ctx := sdk.UnwrapSDKContext(c)
 
 	address := common.HexToAddress(req.Address)
-	code := k.GetCode(ctx, address)
+	acct, err := k.GetAccountOrEmpty(ctx, address)
+	if err != nil {
+		return nil, err
+	}
+	code := k.GetCode(ctx, common.BytesToHash(acct.CodeHash))
 
 	return &types.QueryCodeResponse{
 		Code: code,
@@ -275,6 +284,8 @@ func (k Keeper) EstimateGas(c context.Context, req *types.EthCallRequest) (*type
 		return nil, status.Error(codes.Internal, "failed to load evm config")
 	}
 
+	txConfig := statedb.NewEmptyTxConfig(common.BytesToHash(ctx.HeaderHash().Bytes()))
+
 	// Create a helper to check if a gas allowance results in an executable transaction
 	executable := func(gas uint64) (bool, *types.MsgEthereumTxResponse, error) {
 		args.Gas = (*hexutil.Uint64)(&gas)
@@ -282,7 +293,7 @@ func (k Keeper) EstimateGas(c context.Context, req *types.EthCallRequest) (*type
 		msg := args.ToMessage(req.GasCap)
 
 		// pass false to not commit StateDB
-		rsp, err := k.ApplyMessageWithConfig(ctx, msg, nil, false, cfg)
+		rsp, err := k.ApplyMessageWithConfig(ctx, msg, nil, false, cfg, txConfig)
 		if err != nil {
 			if errors.Is(stacktrace.RootCause(err), core.ErrIntrinsicGas) {
 				return true, nil, nil // Special case, raise gas limit
@@ -331,27 +342,39 @@ func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*typ
 	ctx = ctx.WithBlockTime(req.BlockTime)
 	ctx = ctx.WithHeaderHash(common.Hex2Bytes(req.BlockHash))
 
-	params := k.GetParams(ctx)
-	ethCfg := params.ChainConfig.EthereumConfig(k.eip155ChainID)
-	signer := ethtypes.MakeSigner(ethCfg, big.NewInt(ctx.BlockHeight()))
+	cfg, err := k.EVMConfig(ctx)
+	if err != nil {
+		return nil, stacktrace.Propagate(err, "failed to load evm config")
+	}
+	signer := ethtypes.MakeSigner(cfg.ChainConfig, big.NewInt(ctx.BlockHeight()))
 
-	for i, tx := range req.Predecessors {
+	for _, tx := range req.Predecessors {
 		ethTx := tx.AsTransaction()
 		msg, err := ethTx.AsMessage(signer)
 		if err != nil {
 			continue
 		}
-		k.SetTxHashTransient(ctx, ethTx.Hash())
-		k.SetTxIndexTransient(ctx, uint64(i))
-
-		_, err = k.ApplyMessage(ctx, msg, types.NewNoOpTracer(), true)
+		txConfig := statedb.NewEmptyTxConfig(
+			common.BytesToHash(ctx.HeaderHash()),
+		)
+		_, err = k.ApplyMessageWithConfig(ctx, msg, types.NewNoOpTracer(), true, cfg, txConfig)
 		if err != nil {
 			continue
 		}
 	}
 
 	tx := req.Msg.AsTransaction()
-	result, err := k.traceTx(ctx, signer, req.TxIndex, ethCfg, tx, req.TraceConfig)
+	msg, err := tx.AsMessage(signer)
+	if err != nil {
+		return nil, stacktrace.Propagate(err, "failed to return ethereum transaction as core message")
+	}
+	txConfig := statedb.NewTxConfig(
+		common.BytesToHash(ctx.HeaderHash()), // BlockHash
+		tx.Hash(),                            // TxHash
+		uint(req.TxIndex),                    // TxIndex
+		uint(0),                              // LogIndex
+	)
+	result, _, err := k.traceTx(ctx, msg, cfg, txConfig, req.TraceConfig)
 	if err != nil {
 		// error will be returned with detail status from traceTx
 		return nil, err
@@ -384,22 +407,35 @@ func (k Keeper) TraceBlock(c context.Context, req *types.QueryTraceBlockRequest)
 	ctx = ctx.WithBlockTime(req.BlockTime)
 	ctx = ctx.WithHeaderHash(common.Hex2Bytes(req.BlockHash))
 
-	params := k.GetParams(ctx)
-	ethCfg := params.ChainConfig.EthereumConfig(k.eip155ChainID)
+	cfg, err := k.EVMConfig(ctx)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, err.Error())
+	}
+	ethCfg := cfg.Params.ChainConfig.EthereumConfig(k.eip155ChainID)
 	signer := ethtypes.MakeSigner(ethCfg, big.NewInt(ctx.BlockHeight()))
 
 	txsLength := len(req.Txs)
 	results := make([]*types.TxTraceResult, 0, txsLength)
 
+	var logIndex uint
 	for i, tx := range req.Txs {
 		result := types.TxTraceResult{}
 		ethTx := tx.AsTransaction()
-		traceResult, err := k.traceTx(ctx, signer, uint64(i), ethCfg, ethTx, req.TraceConfig)
+		msg, err := ethTx.AsMessage(signer)
+		if err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, err.Error())
+		}
+		txConfig := statedb.NewTxConfig(
+			common.BytesToHash(ctx.HeaderHash()), // BlockHash
+			ethTx.Hash(),                         // TxHash
+			uint(i),                              // TxIndex
+			uint(logIndex),                       // LogIndex
+		)
+		result.Result, logIndex, err = k.traceTx(ctx, msg, cfg, txConfig, req.TraceConfig)
 		if err != nil {
 			result.Error = err.Error()
 			continue
 		}
-		result.Result = traceResult
 		results = append(results, &result)
 	}
 
@@ -415,22 +451,16 @@ func (k Keeper) TraceBlock(c context.Context, req *types.QueryTraceBlockRequest)
 
 func (k *Keeper) traceTx(
 	ctx sdk.Context,
-	signer ethtypes.Signer,
-	txIndex uint64,
-	ethCfg *ethparams.ChainConfig,
-	tx *ethtypes.Transaction,
+	msg core.Message,
+	cfg *types.EVMConfig,
+	txConfig statedb.TxConfig,
 	traceConfig *types.TraceConfig,
-) (*interface{}, error) {
+) (*interface{}, uint, error) {
 	// Assemble the structured logger or the JavaScript tracer
 	var (
 		tracer vm.Tracer
 		err    error
 	)
-
-	msg, err := tx.AsMessage(signer)
-	if err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
-	}
 
 	switch {
 	case traceConfig != nil && traceConfig.Tracer != "":
@@ -440,7 +470,7 @@ func (k *Keeper) traceTx(
 		if traceConfig.Timeout != "" {
 			timeout, err = time.ParseDuration(traceConfig.Timeout)
 			if err != nil {
-				return nil, status.Errorf(codes.InvalidArgument, "timeout value: %s", err.Error())
+				return nil, 0, status.Errorf(codes.InvalidArgument, "timeout value: %s", err.Error())
 			}
 		}
 
@@ -449,7 +479,7 @@ func (k *Keeper) traceTx(
 		// Construct the JavaScript tracer to execute with
 		tracer, err = tracers.New(traceConfig.Tracer, txContext)
 		if err != nil {
-			return nil, status.Error(codes.Internal, err.Error())
+			return nil, 0, status.Error(codes.Internal, err.Error())
 		}
 
 		// Handle timeouts and RPC cancellations
@@ -472,15 +502,12 @@ func (k *Keeper) traceTx(
 		}
 		tracer = vm.NewStructLogger(&logConfig)
 	default:
-		tracer = types.NewTracer(types.TracerStruct, msg, ethCfg, ctx.BlockHeight(), true)
+		tracer = types.NewTracer(types.TracerStruct, msg, cfg.ChainConfig, ctx.BlockHeight(), true)
 	}
 
-	k.SetTxHashTransient(ctx, tx.Hash())
-	k.SetTxIndexTransient(ctx, txIndex)
-
-	res, err := k.ApplyMessage(ctx, msg, tracer, true)
+	res, err := k.ApplyMessageWithConfig(ctx, msg, tracer, true, cfg, txConfig)
 	if err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
+		return nil, 0, status.Error(codes.Internal, err.Error())
 	}
 
 	var result interface{}
@@ -498,12 +525,12 @@ func (k *Keeper) traceTx(
 	case *tracers.Tracer:
 		result, err = tracer.GetResult()
 		if err != nil {
-			return nil, status.Error(codes.Internal, err.Error())
+			return nil, 0, status.Error(codes.Internal, err.Error())
 		}
 
 	default:
-		return nil, status.Errorf(codes.InvalidArgument, "invalid tracer type %T", tracer)
+		return nil, 0, status.Errorf(codes.InvalidArgument, "invalid tracer type %T", tracer)
 	}
 
-	return &result, nil
+	return &result, txConfig.LogIndex + uint(len(res.Logs)), nil
 }

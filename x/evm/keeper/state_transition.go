@@ -12,6 +12,7 @@ import (
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 
 	ethermint "github.com/tharsis/ethermint/types"
+	"github.com/tharsis/ethermint/x/evm/statedb"
 	"github.com/tharsis/ethermint/x/evm/types"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -20,6 +21,18 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 )
+
+// GasToRefund calculates the amount of gas the state machine should refund to the sender. It is
+// capped by the refund quotient value.
+// Note: do not pass 0 to refundQuotient
+func GasToRefund(availableRefund, gasConsumed, refundQuotient uint64) uint64 {
+	// Apply refund counter
+	refund := gasConsumed / refundQuotient
+	if refund > availableRefund {
+		return availableRefund
+	}
+	return refund
+}
 
 // EVMConfig creates the EVMConfig based on current state
 func (k *Keeper) EVMConfig(ctx sdk.Context) (*types.EVMConfig, error) {
@@ -37,6 +50,16 @@ func (k *Keeper) EVMConfig(ctx sdk.Context) (*types.EVMConfig, error) {
 		ChainConfig: ethCfg,
 		CoinBase:    coinbase,
 	}, nil
+}
+
+// TxConfig load `TxConfig` from current transient storage
+func (k *Keeper) TxConfig(ctx sdk.Context, txHash common.Hash) statedb.TxConfig {
+	return statedb.NewTxConfig(
+		common.BytesToHash(ctx.HeaderHash()), // BlockHash
+		txHash,                               // TxHash
+		uint(k.GetTxIndexTransient(ctx)),     // TxIndex
+		uint(k.GetLogSizeTransient(ctx)),     // LogIndex
+	)
 }
 
 // NewEVM generates a go-ethereum VM from the provided Message fields and the chain parameters
@@ -158,6 +181,7 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, tx *ethtypes.Transaction) (*t
 	if err != nil {
 		return nil, stacktrace.Propagate(err, "failed to load evm config")
 	}
+	txConfig := k.TxConfig(ctx, tx.Hash())
 
 	// get the latest signer according to the chain rules from the config
 	signer := ethtypes.MakeSigner(cfg.ChainConfig, big.NewInt(ctx.BlockHeight()))
@@ -166,12 +190,6 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, tx *ethtypes.Transaction) (*t
 	if err != nil {
 		return nil, stacktrace.Propagate(err, "failed to return ethereum transaction as core message")
 	}
-
-	txHash := tx.Hash()
-
-	// set the transaction hash and index to the impermanent (transient) block state so that it's also
-	// available on the StateDB functions (eg: AddLog)
-	k.SetTxHashTransient(ctx, txHash)
 
 	// snapshot to contain the tx processing and post processing in same scope
 	var commit func()
@@ -185,7 +203,7 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, tx *ethtypes.Transaction) (*t
 	}
 
 	// pass true to commit the StateDB
-	res, err := k.ApplyMessageWithConfig(tmpCtx, msg, nil, true, cfg)
+	res, err := k.ApplyMessageWithConfig(tmpCtx, msg, nil, true, cfg, txConfig)
 	if err != nil {
 		return nil, stacktrace.Propagate(err, "failed to apply ethereum core message")
 	}
@@ -196,12 +214,11 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, tx *ethtypes.Transaction) (*t
 		return nil, stacktrace.Propagate(err, "failed to refund gas leftover gas to sender %s", msg.From())
 	}
 
-	res.Hash = txHash.Hex()
-	logs := k.GetTxLogsTransient(tmpCtx, txHash)
+	logs := types.LogsToEthereum(res.Logs)
 
 	if !res.Failed() {
 		// Only call hooks if tx executed successfully.
-		if err = k.PostTxProcessing(tmpCtx, txHash, logs); err != nil {
+		if err = k.PostTxProcessing(tmpCtx, txConfig.TxHash, logs); err != nil {
 			// If hooks return error, revert the whole tx.
 			res.VmError = types.ErrPostTxProcessing.Error()
 			k.Logger(ctx).Error("tx post processing failed", "error", err)
@@ -213,14 +230,15 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, tx *ethtypes.Transaction) (*t
 	}
 
 	if len(logs) > 0 {
-		res.Logs = types.NewLogsFromEth(logs)
 		// Update transient block bloom filter
 		bloom := k.GetBlockBloomTransient(ctx)
 		bloom.Or(bloom, big.NewInt(0).SetBytes(ethtypes.LogsBloom(logs)))
 		k.SetBlockBloomTransient(ctx, bloom)
+
+		k.SetLogSizeTransient(ctx, uint64(txConfig.LogIndex)+uint64(len(logs)))
 	}
 
-	k.IncreaseTxIndexTransient(ctx)
+	k.SetTxIndexTransient(ctx, uint64(txConfig.TxIndex)+1)
 
 	// update the gas used after refund
 	k.ResetGasMeterAndConsumeGas(ctx, res.GasUsed)
@@ -266,7 +284,7 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, tx *ethtypes.Transaction) (*t
 // Commit parameter
 //
 // If commit is true, the cache context stack will be committed, otherwise discarded.
-func (k *Keeper) ApplyMessageWithConfig(ctx sdk.Context, msg core.Message, tracer vm.Tracer, commit bool, cfg *types.EVMConfig) (*types.MsgEthereumTxResponse, error) {
+func (k *Keeper) ApplyMessageWithConfig(ctx sdk.Context, msg core.Message, tracer vm.Tracer, commit bool, cfg *types.EVMConfig, txConfig statedb.TxConfig) (*types.MsgEthereumTxResponse, error) {
 	var (
 		ret   []byte // return bytes from evm execution
 		vmErr error  // vm errors do not effect consensus and are therefore not assigned to err
@@ -279,7 +297,7 @@ func (k *Keeper) ApplyMessageWithConfig(ctx sdk.Context, msg core.Message, trace
 		return nil, stacktrace.Propagate(types.ErrCallDisabled, "failed to call contract")
 	}
 
-	stateDB := types.NewStateDB(ctx, k)
+	stateDB := statedb.New(ctx, k, txConfig)
 	evm := k.NewEVM(ctx, msg, cfg, tracer, stateDB)
 
 	sender := vm.AccountRef(msg.From())
@@ -316,7 +334,7 @@ func (k *Keeper) ApplyMessageWithConfig(ctx sdk.Context, msg core.Message, trace
 		return nil, stacktrace.Propagate(types.ErrGasOverflow, "apply message")
 	}
 	gasUsed := msg.Gas() - leftoverGas
-	refund := k.GasToRefund(stateDB.CurrentContext(), gasUsed, refundQuotient)
+	refund := GasToRefund(stateDB.GetRefund(), gasUsed, refundQuotient)
 	if refund > gasUsed {
 		return nil, stacktrace.Propagate(types.ErrGasOverflow, "apply message")
 	}
@@ -328,16 +346,19 @@ func (k *Keeper) ApplyMessageWithConfig(ctx sdk.Context, msg core.Message, trace
 		vmError = vmErr.Error()
 	}
 
-	// The context stack is designed specifically for `StateDB` interface, it should only be used in `ApplyMessage`,
-	// after return, the stack should be clean, the cached states are either committed or discarded.
+	// The dirty states in `StateDB` is either committed or discarded after return
 	if commit {
-		stateDB.Commit()
+		if err := stateDB.Commit(); err != nil {
+			return nil, err
+		}
 	}
 
 	return &types.MsgEthereumTxResponse{
 		GasUsed: gasUsed,
 		VmError: vmError,
 		Ret:     ret,
+		Logs:    types.NewLogsFromEth(stateDB.Logs()),
+		Hash:    txConfig.TxHash.Hex(),
 	}, nil
 }
 
@@ -347,7 +368,8 @@ func (k *Keeper) ApplyMessage(ctx sdk.Context, msg core.Message, tracer vm.Trace
 	if err != nil {
 		return nil, stacktrace.Propagate(err, "failed to load evm config")
 	}
-	return k.ApplyMessageWithConfig(ctx, msg, tracer, commit, cfg)
+	txConfig := statedb.NewEmptyTxConfig(common.BytesToHash(ctx.HeaderHash()))
+	return k.ApplyMessageWithConfig(ctx, msg, tracer, commit, cfg, txConfig)
 }
 
 // GetEthIntrinsicGas returns the intrinsic gas cost for the transaction
@@ -357,19 +379,6 @@ func (k *Keeper) GetEthIntrinsicGas(ctx sdk.Context, msg core.Message, cfg *para
 	istanbul := cfg.IsIstanbul(height)
 
 	return core.IntrinsicGas(msg.Data(), msg.AccessList(), isContractCreation, homestead, istanbul)
-}
-
-// GasToRefund calculates the amount of gas the state machine should refund to the sender. It is
-// capped by the refund quotient value.
-// Note: do not pass 0 to refundQuotient
-func (k *Keeper) GasToRefund(ctx sdk.Context, gasConsumed, refundQuotient uint64) uint64 {
-	// Apply refund counter
-	refund := gasConsumed / refundQuotient
-	availableRefund := k.GetRefund(ctx)
-	if refund > availableRefund {
-		return availableRefund
-	}
-	return refund
 }
 
 // RefundGas transfers the leftover gas to the sender of the message, caped to half of the total gas

@@ -86,3 +86,15 @@ func BinSearch(lo, hi uint64, executable func(uint64) (bool, *MsgEthereumTxRespo
 	}
 	return hi, nil
 }
+
+// GasToRefund calculates the amount of gas the state machine should refund to the sender. It is
+// capped by the refund quotient value.
+// Note: do not pass 0 to refundQuotient
+func GasToRefund(availableRefund, gasConsumed, refundQuotient uint64) uint64 {
+	// Apply refund counter
+	refund := gasConsumed / refundQuotient
+	if refund > availableRefund {
+		return availableRefund
+	}
+	return refund
+}

@@ -1,6 +1,7 @@
 package ante
 
 import (
+	"bytes"
 	"errors"
 	"math/big"
 
@@ -12,6 +13,7 @@ import (
 
 	ethermint "github.com/tharsis/ethermint/types"
 	evmkeeper "github.com/tharsis/ethermint/x/evm/keeper"
+	"github.com/tharsis/ethermint/x/evm/statedb"
 	evmtypes "github.com/tharsis/ethermint/x/evm/types"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -22,11 +24,10 @@ import (
 
 // EVMKeeper defines the expected keeper interface used on the Eth AnteHandler
 type EVMKeeper interface {
-	evmtypes.StateDBKeeper
+	statedb.Keeper
 
 	ChainID() *big.Int
 	GetParams(ctx sdk.Context) evmtypes.Params
-	ResetRefundTransient(ctx sdk.Context)
 	NewEVM(ctx sdk.Context, msg core.Message, cfg *evmtypes.EVMConfig, tracer vm.Tracer, stateDB vm.StateDB) *vm.EVM
 	DeductTxCostsFromUserBalance(
 		ctx sdk.Context, msgEthTx evmtypes.MsgEthereumTx, txData evmtypes.TxData, denom string, homestead, istanbul bool,
@@ -121,8 +122,6 @@ func (avd EthAccountVerificationDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx
 		return next(ctx, tx, simulate)
 	}
 
-	evmDenom := avd.evmKeeper.GetParams(ctx).EvmDenom
-
 	for i, msg := range tx.GetMsgs() {
 		msgEthTx, ok := msg.(*evmtypes.MsgEthereumTx)
 		if !ok {
@@ -148,19 +147,21 @@ func (avd EthAccountVerificationDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx
 
 		// check whether the sender address is EOA
 		fromAddr := common.BytesToAddress(from)
-		codeHash := avd.evmKeeper.GetCodeHash(ctx, fromAddr)
-		if codeHash != common.BytesToHash(evmtypes.EmptyCodeHash) {
+		acct, err := avd.evmKeeper.GetAccount(ctx, fromAddr)
+		if err != nil {
 			return ctx, stacktrace.Propagate(sdkerrors.Wrapf(sdkerrors.ErrInvalidType,
-				"the sender is not EOA: address <%v>, codeHash <%s>", fromAddr, codeHash), "")
+				"the sender is not EthAccount: address <%v>", fromAddr), "")
 		}
-
-		acc := avd.ak.GetAccount(ctx, from)
-		if acc == nil {
-			acc = avd.ak.NewAccountWithAddress(ctx, from)
+		if acct == nil {
+			acc := avd.ak.NewAccountWithAddress(ctx, from)
 			avd.ak.SetAccount(ctx, acc)
+			acct = statedb.NewEmptyAccount()
+		} else if !bytes.Equal(acct.CodeHash, evmtypes.EmptyCodeHash) {
+			return ctx, stacktrace.Propagate(sdkerrors.Wrapf(sdkerrors.ErrInvalidType,
+				"the sender is not EOA: address <%v>, codeHash <%s>", fromAddr, acct.CodeHash), "")
 		}
 
-		if err := evmkeeper.CheckSenderBalance(ctx, avd.bankKeeper, from, txData, evmDenom); err != nil {
+		if err := evmkeeper.CheckSenderBalance(sdk.NewIntFromBigInt(acct.Balance), txData); err != nil {
 			return ctx, stacktrace.Propagate(err, "failed to check sender balance")
 		}
 
@@ -255,9 +256,6 @@ func NewEthGasConsumeDecorator(evmKeeper EVMKeeper) EthGasConsumeDecorator {
 // - user doesn't have enough balance to deduct the transaction fees (gas_limit * gas_price)
 // - transaction or block gas meter runs out of gas
 func (egcd EthGasConsumeDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate bool, next sdk.AnteHandler) (newCtx sdk.Context, err error) {
-	// reset the refund gas value in the keeper for the current transaction
-	egcd.evmKeeper.ResetRefundTransient(ctx)
-
 	params := egcd.evmKeeper.GetParams(ctx)
 
 	ethCfg := params.ChainConfig.EthereumConfig(egcd.evmKeeper.ChainID())
@@ -360,7 +358,7 @@ func (ctd CanTransferDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate 
 			Params:      params,
 			CoinBase:    common.Address{},
 		}
-		stateDB := evmtypes.NewStateDB(ctx, ctd.evmKeeper)
+		stateDB := statedb.New(ctx, ctd.evmKeeper, statedb.NewEmptyTxConfig(common.BytesToHash(ctx.HeaderHash().Bytes())))
 		evm := ctd.evmKeeper.NewEVM(ctx, coreMsg, cfg, evmtypes.NewNoOpTracer(), stateDB)
 
 		// check that caller has enough balance to cover asset transfer for **topmost** call
@@ -374,61 +372,6 @@ func (ctd CanTransferDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate 
 	}
 
 	// set the original gas meter
-	return next(ctx, tx, simulate)
-}
-
-// AccessListDecorator prepare an access list for the sender if Yolov3/Berlin/EIPs 2929 and 2930 are
-// applicable at the current block number.
-type AccessListDecorator struct {
-	evmKeeper EVMKeeper
-}
-
-// NewAccessListDecorator creates a new AccessListDecorator.
-func NewAccessListDecorator(evmKeeper EVMKeeper) AccessListDecorator {
-	return AccessListDecorator{
-		evmKeeper: evmKeeper,
-	}
-}
-
-// AnteHandle handles the preparatory steps for executing an EVM state transition with
-// regards to both EIP-2929 and EIP-2930:
-//
-// 	- Add sender to access list (2929)
-// 	- Add destination to access list (2929)
-// 	- Add precompiles to access list (2929)
-// 	- Add the contents of the optional tx access list (2930)
-//
-// The AnteHandler will only prepare the access list if Yolov3/Berlin/EIPs 2929 and 2930 are applicable at the current number.
-func (ald AccessListDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate bool, next sdk.AnteHandler) (sdk.Context, error) {
-	params := ald.evmKeeper.GetParams(ctx)
-	ethCfg := params.ChainConfig.EthereumConfig(ald.evmKeeper.ChainID())
-
-	rules := ethCfg.Rules(big.NewInt(ctx.BlockHeight()))
-
-	// we don't need to prepare the access list if the chain is not currently on the Berlin upgrade
-	if !rules.IsBerlin {
-		return next(ctx, tx, simulate)
-	}
-
-	for i, msg := range tx.GetMsgs() {
-		msgEthTx, ok := msg.(*evmtypes.MsgEthereumTx)
-		if !ok {
-			return ctx, stacktrace.Propagate(
-				sdkerrors.Wrapf(sdkerrors.ErrUnknownRequest, "invalid transaction type %T, expected %T", tx, (*evmtypes.MsgEthereumTx)(nil)),
-				"failed to cast transaction %d", i,
-			)
-		}
-
-		sender := common.BytesToAddress(msgEthTx.GetFrom())
-
-		txData, err := evmtypes.UnpackTxData(msgEthTx.Data)
-		if err != nil {
-			return ctx, stacktrace.Propagate(err, "failed to unpack tx data")
-		}
-
-		ald.evmKeeper.PrepareAccessList(ctx, sender, txData.GetTo(), vm.ActivePrecompiles(rules), txData.GetAccessList())
-	}
-
 	return next(ctx, tx, simulate)
 }
 

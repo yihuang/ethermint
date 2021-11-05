@@ -15,6 +15,7 @@ type Keeper interface {
 	GetState(ctx sdk.Context, addr common.Address, key common.Hash) common.Hash
 	GetCode(ctx sdk.Context, codeHash common.Hash) []byte
 	GetCodeSize(ctx sdk.Context, codeHash common.Hash) int
+	// the callback returns false to break early
 	ForEachStorage(ctx sdk.Context, addr common.Address, cb func(key, value common.Hash) bool)
 
 	// Write, only called by `StateDB.Commit()`

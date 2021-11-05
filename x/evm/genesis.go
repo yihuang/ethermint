@@ -1,11 +1,13 @@
 package evm
 
 import (
+	"bytes"
 	"fmt"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	abci "github.com/tendermint/tendermint/abci/types"
 
 	ethermint "github.com/tharsis/ethermint/types"
@@ -38,7 +40,7 @@ func InitGenesis(
 			panic(fmt.Errorf("account not found for address %s", account.Address))
 		}
 
-		_, ok := acc.(*ethermint.EthAccount)
+		ethAcct, ok := acc.(*ethermint.EthAccount)
 		if !ok {
 			panic(
 				fmt.Errorf("account %s must be an %T type, got %T",
@@ -47,9 +49,12 @@ func InitGenesis(
 			)
 		}
 
-		if err := k.SetCode(ctx, address, common.Hex2Bytes(account.Code)); err != nil {
-			panic(err)
+		code := common.Hex2Bytes(account.Code)
+		codeHash := crypto.Keccak256Hash(code)
+		if !bytes.Equal(common.HexToHash(ethAcct.CodeHash).Bytes(), codeHash.Bytes()) {
+			panic("code don't match codeHash")
 		}
+		k.SetCode(ctx, codeHash.Bytes(), code)
 
 		for _, storage := range account.Storage {
 			k.SetState(ctx, address, common.HexToHash(storage.Key), common.HexToHash(storage.Value))
@@ -71,14 +76,11 @@ func ExportGenesis(ctx sdk.Context, k *keeper.Keeper, ak types.AccountKeeper) *t
 
 		addr := ethAccount.EthAddress()
 
-		storage, err := k.GetAccountStorage(ctx, addr)
-		if err != nil {
-			panic(err)
-		}
+		storage := k.GetAccountStorage(ctx, addr)
 
 		genAccount := types.GenesisAccount{
 			Address: addr.String(),
-			Code:    common.Bytes2Hex(k.GetCode(ctx, addr)),
+			Code:    common.Bytes2Hex(k.GetCode(ctx, ethAccount.GetCodeHash())),
 			Storage: storage,
 		}
 

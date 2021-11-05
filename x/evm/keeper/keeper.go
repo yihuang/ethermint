@@ -2,6 +2,7 @@ package keeper
 
 import (
 	"bytes"
+	"errors"
 	"math/big"
 
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -12,12 +13,18 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/palantir/stacktrace"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/tendermint/tendermint/libs/log"
 
-	"github.com/ethereum/go-ethereum/params"
 	ethermint "github.com/tharsis/ethermint/types"
+	"github.com/tharsis/ethermint/x/evm/statedb"
 	"github.com/tharsis/ethermint/x/evm/types"
+)
+
+var (
+	_             statedb.Keeper = &Keeper{}
+	emptyCodeHash                = crypto.Keccak256(nil)
 )
 
 // Keeper grants access to the EVM module state and implements the go-ethereum StateDB interface.
@@ -150,23 +157,6 @@ func (k Keeper) SetBlockBloomTransient(ctx sdk.Context, bloom *big.Int) {
 // Tx
 // ----------------------------------------------------------------------------
 
-// GetTxHashTransient returns the hash of current processing transaction
-func (k Keeper) GetTxHashTransient(ctx sdk.Context) common.Hash {
-	store := ctx.TransientStore(k.transientKey)
-	bz := store.Get(types.KeyPrefixTransientTxHash)
-	if len(bz) == 0 {
-		return common.Hash{}
-	}
-
-	return common.BytesToHash(bz)
-}
-
-// SetTxHashTransient set the hash of processing transaction
-func (k Keeper) SetTxHashTransient(ctx sdk.Context, hash common.Hash) {
-	store := ctx.TransientStore(k.transientKey)
-	store.Set(types.KeyPrefixTransientTxHash, hash.Bytes())
-}
-
 // SetTxIndexTransient set the index of processing transaction
 func (k Keeper) SetTxIndexTransient(ctx sdk.Context, index uint64) {
 	store := ctx.TransientStore(k.transientKey)
@@ -184,57 +174,9 @@ func (k Keeper) GetTxIndexTransient(ctx sdk.Context) uint64 {
 	return sdk.BigEndianToUint64(bz)
 }
 
-// IncreaseTxIndexTransient fetches the current EVM tx index from the transient store, increases its
-// value by one and then sets the new index back to the transient store.
-func (k Keeper) IncreaseTxIndexTransient(ctx sdk.Context) {
-	txIndex := k.GetTxIndexTransient(ctx)
-	k.SetTxIndexTransient(ctx, txIndex+1)
-}
-
-// ResetRefundTransient resets the available refund amount to 0
-func (k Keeper) ResetRefundTransient(ctx sdk.Context) {
-	store := ctx.TransientStore(k.transientKey)
-	store.Set(types.KeyPrefixTransientRefund, sdk.Uint64ToBigEndian(0))
-}
-
 // ----------------------------------------------------------------------------
 // Log
 // ----------------------------------------------------------------------------
-
-// GetTxLogsTransient returns the current logs for a given transaction hash from the KVStore.
-// This function returns an empty, non-nil slice if no logs are found.
-func (k Keeper) GetTxLogsTransient(ctx sdk.Context, txHash common.Hash) []*ethtypes.Log {
-	store := prefix.NewStore(ctx.TransientStore(k.transientKey), types.KeyPrefixTransientTxLogs)
-
-	// We store the logs with key equal to txHash.Bytes() | sdk.Uint64ToBigEndian(uint64(log.Index)),
-	// therefore, we set the end boundary(excluded) to txHash.Bytes() | uint64.Max -> []byte
-	end := txHash.Bytes()
-	end = append(end, []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}...)
-
-	iter := store.Iterator(txHash.Bytes(), end)
-	defer iter.Close()
-
-	logs := []*ethtypes.Log{}
-	for ; iter.Valid(); iter.Next() {
-		var log types.Log
-		k.cdc.MustUnmarshal(iter.Value(), &log)
-		logs = append(logs, log.ToEthereum())
-	}
-
-	return logs
-}
-
-// AddLogTransient sets the log for a transaction in the transient store.
-func (k Keeper) AddLogTransient(ctx sdk.Context, log *ethtypes.Log) {
-	store := prefix.NewStore(ctx.TransientStore(k.transientKey), types.KeyPrefixTransientTxLogs)
-
-	key := log.TxHash.Bytes()
-	key = append(key, sdk.Uint64ToBigEndian(uint64(log.Index))...)
-
-	txIndexLog := types.NewLogFromEth(log)
-	bz := k.cdc.MustMarshal(txIndexLog)
-	store.Set(key, bz)
-}
 
 // GetLogSizeTransient returns EVM log index on the current block.
 func (k Keeper) GetLogSizeTransient(ctx sdk.Context) uint64 {
@@ -247,12 +189,11 @@ func (k Keeper) GetLogSizeTransient(ctx sdk.Context) uint64 {
 	return sdk.BigEndianToUint64(bz)
 }
 
-// IncreaseLogSizeTransient fetches the current EVM log index from the transient store, increases its
+// SetLogSizeTransient fetches the current EVM log index from the transient store, increases its
 // value by one and then sets the new index back to the transient store.
-func (k Keeper) IncreaseLogSizeTransient(ctx sdk.Context) {
-	logSize := k.GetLogSizeTransient(ctx)
+func (k Keeper) SetLogSizeTransient(ctx sdk.Context, logSize uint64) {
 	store := ctx.TransientStore(k.transientKey)
-	store.Set(types.KeyPrefixTransientLogSize, sdk.Uint64ToBigEndian(logSize+1))
+	store.Set(types.KeyPrefixTransientLogSize, sdk.Uint64ToBigEndian(logSize))
 }
 
 // ----------------------------------------------------------------------------
@@ -260,74 +201,20 @@ func (k Keeper) IncreaseLogSizeTransient(ctx sdk.Context) {
 // ----------------------------------------------------------------------------
 
 // GetAccountStorage return state storage associated with an account
-func (k Keeper) GetAccountStorage(ctx sdk.Context, address common.Address) (types.Storage, error) {
+func (k Keeper) GetAccountStorage(ctx sdk.Context, address common.Address) types.Storage {
 	storage := types.Storage{}
 
-	err := k.ForEachStorage(ctx, address, func(key, value common.Hash) bool {
+	k.ForEachStorage(ctx, address, func(key, value common.Hash) bool {
 		storage = append(storage, types.NewState(key, value))
-		return false
+		return true
 	})
-	if err != nil {
-		return types.Storage{}, err
-	}
 
-	return storage, nil
+	return storage
 }
 
 // ----------------------------------------------------------------------------
 // Account
 // ----------------------------------------------------------------------------
-
-func (k Keeper) DeleteState(ctx sdk.Context, addr common.Address, key common.Hash) {
-	store := prefix.NewStore(ctx.KVStore(k.storeKey), types.AddressStoragePrefix(addr))
-	store.Delete(key.Bytes())
-}
-
-// DeleteAccountStorage clears all the storage state associated with the given address.
-func (k Keeper) DeleteAccountStorage(ctx sdk.Context, addr common.Address) {
-	_ = k.ForEachStorage(ctx, addr, func(key, _ common.Hash) bool {
-		k.DeleteState(ctx, addr, key)
-		return false
-	})
-}
-
-// DeleteCode removes the contract code byte array from the store associated with
-// the given address.
-func (k Keeper) DeleteCode(ctx sdk.Context, addr common.Address) {
-	hash := k.GetCodeHash(ctx, addr)
-	if bytes.Equal(hash.Bytes(), common.BytesToHash(types.EmptyCodeHash).Bytes()) {
-		return
-	}
-
-	store := prefix.NewStore(ctx.KVStore(k.storeKey), types.KeyPrefixCode)
-	store.Delete(hash.Bytes())
-}
-
-// ClearBalance subtracts the EVM all the balance denomination from the address
-// balance while also updating the total supply.
-func (k Keeper) ClearBalance(ctx sdk.Context, addr sdk.AccAddress) (prevBalance sdk.Coin, err error) {
-	params := k.GetParams(ctx)
-
-	prevBalance = k.bankKeeper.GetBalance(ctx, addr, params.EvmDenom)
-	if prevBalance.IsPositive() {
-		if err := k.bankKeeper.SendCoinsFromAccountToModule(ctx, addr, types.ModuleName, sdk.Coins{prevBalance}); err != nil {
-			return sdk.Coin{}, stacktrace.Propagate(err, "failed to transfer to module account")
-		}
-
-		if err := k.bankKeeper.BurnCoins(ctx, types.ModuleName, sdk.Coins{prevBalance}); err != nil {
-			return sdk.Coin{}, stacktrace.Propagate(err, "failed to burn coins from evm module account")
-		}
-	}
-
-	return prevBalance, nil
-}
-
-// ResetAccount removes the code, storage state, but keep all the native tokens stored
-// with the given address.
-func (k Keeper) ResetAccount(ctx sdk.Context, addr common.Address) {
-	k.DeleteCode(ctx, addr)
-	k.DeleteAccountStorage(ctx, addr)
-}
 
 // SetHooks sets the hooks for the EVM module
 func (k *Keeper) SetHooks(eh types.EvmHooks) *Keeper {
@@ -350,4 +237,204 @@ func (k *Keeper) PostTxProcessing(ctx sdk.Context, txHash common.Hash, logs []*e
 // Tracer return a default vm.Tracer based on current keeper state
 func (k Keeper) Tracer(ctx sdk.Context, msg core.Message, ethCfg *params.ChainConfig) vm.Tracer {
 	return types.NewTracer(k.tracer, msg, ethCfg, ctx.BlockHeight(), k.debug)
+}
+
+// ----------------------------------------------------------------------------
+// statedb.Keeper implementation
+// ----------------------------------------------------------------------------
+
+func (k *Keeper) GetBalance(ctx sdk.Context, addr common.Address) *big.Int {
+	cosmosAddr := sdk.AccAddress(addr.Bytes())
+	params := k.GetParams(ctx)
+	coin := k.bankKeeper.GetBalance(ctx, cosmosAddr, params.EvmDenom)
+	return coin.Amount.BigInt()
+}
+
+func (k *Keeper) GetAccount(ctx sdk.Context, addr common.Address) (*statedb.Account, error) {
+	cosmosAddr := sdk.AccAddress(addr.Bytes())
+	acct := k.accountKeeper.GetAccount(ctx, cosmosAddr)
+	if acct == nil {
+		return nil, nil
+	}
+
+	ethAcct, ok := acct.(*ethermint.EthAccount)
+	if !ok {
+		return nil, errors.New("not EthAccount")
+	}
+
+	balance := k.GetBalance(ctx, addr)
+	return &statedb.Account{
+		Nonce:    ethAcct.Sequence,
+		Balance:  balance,
+		CodeHash: common.FromHex(ethAcct.CodeHash),
+	}, nil
+}
+
+func (k *Keeper) GetAccountOrEmpty(ctx sdk.Context, addr common.Address) (statedb.Account, error) {
+	acct, err := k.GetAccount(ctx, addr)
+	if err != nil {
+		return statedb.Account{}, err
+	}
+	if acct == nil {
+		// empty account
+		return statedb.Account{
+			Balance:  new(big.Int),
+			CodeHash: emptyCodeHash,
+		}, nil
+	}
+	return *acct, nil
+}
+
+func (k *Keeper) GetState(ctx sdk.Context, addr common.Address, key common.Hash) common.Hash {
+	store := prefix.NewStore(ctx.KVStore(k.storeKey), types.AddressStoragePrefix(addr))
+
+	value := store.Get(key.Bytes())
+	if len(value) == 0 {
+		return common.Hash{}
+	}
+
+	return common.BytesToHash(value)
+}
+
+func (k *Keeper) GetCode(ctx sdk.Context, codeHash common.Hash) []byte {
+	store := prefix.NewStore(ctx.KVStore(k.storeKey), types.KeyPrefixCode)
+	return store.Get(codeHash.Bytes())
+}
+
+func (k *Keeper) GetCodeSize(ctx sdk.Context, codeHash common.Hash) int {
+	return len(k.GetCode(ctx, codeHash))
+}
+
+// ForEachStorage iterate contract storage, callback return false to break early
+func (k *Keeper) ForEachStorage(ctx sdk.Context, addr common.Address, cb func(key, value common.Hash) bool) {
+	store := ctx.KVStore(k.storeKey)
+	prefix := types.AddressStoragePrefix(addr)
+
+	iterator := sdk.KVStorePrefixIterator(store, prefix)
+	defer iterator.Close()
+
+	for ; iterator.Valid(); iterator.Next() {
+		// TODO: check if the key prefix needs to be trimmed
+		key := common.BytesToHash(iterator.Key())
+		value := common.BytesToHash(iterator.Value())
+
+		// check if iteration stops
+		if !cb(key, value) {
+			return
+		}
+	}
+}
+
+// SetBalance update account's balance, compare with current balance first, then decide to mint or burn.
+func (k *Keeper) SetBalance(ctx sdk.Context, addr common.Address, amount *big.Int) error {
+	cosmosAddr := sdk.AccAddress(addr.Bytes())
+
+	params := k.GetParams(ctx)
+	coin := k.bankKeeper.GetBalance(ctx, cosmosAddr, params.EvmDenom)
+	balance := coin.Amount.BigInt()
+	delta := new(big.Int).Sub(amount, balance)
+	switch delta.Sign() {
+	case 1:
+		// mint
+		coins := sdk.NewCoins(sdk.NewCoin(params.EvmDenom, sdk.NewIntFromBigInt(delta)))
+		if err := k.bankKeeper.MintCoins(ctx, types.ModuleName, coins); err != nil {
+			return err
+		}
+		if err := k.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, cosmosAddr, coins); err != nil {
+			return err
+		}
+	case -1:
+		// burn
+		coins := sdk.NewCoins(sdk.NewCoin(params.EvmDenom, sdk.NewIntFromBigInt(new(big.Int).Neg(delta))))
+		if err := k.bankKeeper.SendCoinsFromAccountToModule(ctx, cosmosAddr, types.ModuleName, coins); err != nil {
+			return err
+		}
+		if err := k.bankKeeper.BurnCoins(ctx, types.ModuleName, coins); err != nil {
+			return err
+		}
+	default:
+		// not changed
+	}
+	return nil
+}
+
+// SetAccount updates nonce/balance/codeHash together.
+func (k *Keeper) SetAccount(ctx sdk.Context, addr common.Address, account statedb.Account) error {
+	// update account
+	cosmosAddr := sdk.AccAddress(addr.Bytes())
+	acct := k.accountKeeper.GetAccount(ctx, cosmosAddr)
+	if acct == nil {
+		acct = k.accountKeeper.NewAccountWithAddress(ctx, cosmosAddr)
+	}
+	ethAcct, ok := acct.(*ethermint.EthAccount)
+	if !ok {
+		return errors.New("not EthAccount")
+	}
+	if err := ethAcct.SetSequence(account.Nonce); err != nil {
+		return err
+	}
+	ethAcct.CodeHash = common.Bytes2Hex(account.CodeHash)
+	k.accountKeeper.SetAccount(ctx, ethAcct)
+
+	return k.SetBalance(ctx, addr, account.Balance)
+}
+
+func (k *Keeper) SetState(ctx sdk.Context, addr common.Address, key, value common.Hash) {
+	store := prefix.NewStore(ctx.KVStore(k.storeKey), types.AddressStoragePrefix(addr))
+	if len(value) == 0 {
+		store.Delete(key.Bytes())
+	} else {
+		store.Set(key.Bytes(), value.Bytes())
+	}
+}
+
+func (k *Keeper) SetCode(ctx sdk.Context, codeHash []byte, code []byte) {
+	store := prefix.NewStore(ctx.KVStore(k.storeKey), types.KeyPrefixCode)
+
+	// store or delete code
+	if len(code) == 0 {
+		store.Delete(codeHash)
+	} else {
+		store.Set(codeHash, code)
+	}
+}
+
+// PurgeAccount handles contract's suicide call:
+// - clear balance
+// - remove code
+// - remove states
+func (k *Keeper) PurgeAccount(ctx sdk.Context, addr common.Address) error {
+	acct, err := k.GetAccount(ctx, addr)
+	if err != nil {
+		return err
+	}
+
+	if acct == nil {
+		return nil
+	}
+
+	// clear balance
+	if acct.Balance.Sign() != 0 {
+		if err := k.SetBalance(ctx, addr, new(big.Int)); err != nil {
+			return err
+		}
+	}
+
+	// remove code
+	if !bytes.Equal(acct.CodeHash, emptyCodeHash) {
+		k.SetCode(ctx, acct.CodeHash, []byte{})
+	}
+
+	// clear storage
+	var keysToDelete []common.Hash
+	k.ForEachStorage(ctx, addr, func(key, value common.Hash) bool {
+		keysToDelete = append(keysToDelete, key)
+		return true
+	})
+	for _, key := range keysToDelete {
+		k.SetState(ctx, addr, key, common.Hash{})
+	}
+
+	// FIXME should we remove account?
+	return nil
 }
