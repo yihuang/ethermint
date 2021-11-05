@@ -98,7 +98,13 @@ func (a *API) TraceTransaction(hash common.Hash, config *evmtypes.TraceConfig) (
 		traceTxRequest.TraceConfig = config
 	}
 
-	traceResult, err := a.queryClient.TraceTx(rpctypes.ContextWithHeight(transaction.Height), &traceTxRequest)
+	contextHeight := transaction.Height
+	// 0 is a special value in `ContextWithHeight`
+	if contextHeight > 1 {
+		// minus one to get the context at the begining of the block
+		contextHeight--
+	}
+	traceResult, err := a.queryClient.TraceTx(rpctypes.ContextWithHeight(contextHeight), &traceTxRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +158,13 @@ func (a API) traceBlock(height rpctypes.BlockNumber, config *evmtypes.TraceConfi
 		threads = txsLength
 	}
 
-	ctxWithHeight := rpctypes.ContextWithHeight(int64(height))
+	contextHeight := height
+	// 0 is a special value for `ContextWithHeight`.
+	if contextHeight > 1 {
+		// minus one to get the context at the begining of the block
+		contextHeight--
+	}
+	ctxWithHeight := rpctypes.ContextWithHeight(int64(contextHeight))
 
 	wg.Add(threads)
 	for th := 0; th < threads; th++ {
