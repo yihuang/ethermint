@@ -251,8 +251,7 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, tx *ethtypes.Transaction) (*t
 //
 // Reverted state
 //
-// The snapshot and rollback are supported by the `ContextStack`, which should be only used inside `ApplyMessage`,
-// because some operations has exponential computational complexity with deep stack.
+// The snapshot and rollback are supported by the `statedb.StateDB`.
 //
 // Different Callers
 //
