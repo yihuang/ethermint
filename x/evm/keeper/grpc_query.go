@@ -429,7 +429,7 @@ func (k Keeper) TraceBlock(c context.Context, req *types.QueryTraceBlockRequest)
 			common.BytesToHash(ctx.HeaderHash()), // BlockHash
 			ethTx.Hash(),                         // TxHash
 			uint(i),                              // TxIndex
-			uint(logIndex),                       // LogIndex
+			logIndex,                             // LogIndex
 		)
 		result.Result, logIndex, err = k.traceTx(ctx, msg, cfg, txConfig, req.TraceConfig)
 		if err != nil {
