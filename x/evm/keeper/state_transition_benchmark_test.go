@@ -151,8 +151,10 @@ func BenchmarkApplyTransaction(b *testing.B) {
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
+		acct, err := suite.app.EvmKeeper.GetAccountOrEmpty(suite.ctx, suite.address)
+		require.NoError(b, err)
 		tx, err := newSignedEthTx(templateAccessListTx,
-			suite.app.EvmKeeper.GetNonce(suite.address),
+			acct.Nonce,
 			sdk.AccAddress(suite.address.Bytes()),
 			suite.signer,
 			ethSigner,
@@ -160,7 +162,7 @@ func BenchmarkApplyTransaction(b *testing.B) {
 		require.NoError(b, err)
 
 		b.StartTimer()
-		resp, err := suite.app.EvmKeeper.ApplyTransaction(tx)
+		resp, err := suite.app.EvmKeeper.ApplyTransaction(suite.ctx, tx)
 		b.StopTimer()
 
 		require.NoError(b, err)
@@ -178,8 +180,10 @@ func BenchmarkApplyTransactionWithLegacyTx(b *testing.B) {
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
+		acct, err := suite.app.EvmKeeper.GetAccountOrEmpty(suite.ctx, suite.address)
+		require.NoError(b, err)
 		tx, err := newSignedEthTx(templateLegacyTx,
-			suite.app.EvmKeeper.GetNonce(suite.address),
+			acct.Nonce,
 			sdk.AccAddress(suite.address.Bytes()),
 			suite.signer,
 			ethSigner,
@@ -187,7 +191,7 @@ func BenchmarkApplyTransactionWithLegacyTx(b *testing.B) {
 		require.NoError(b, err)
 
 		b.StartTimer()
-		resp, err := suite.app.EvmKeeper.ApplyTransaction(tx)
+		resp, err := suite.app.EvmKeeper.ApplyTransaction(suite.ctx, tx)
 		b.StopTimer()
 
 		require.NoError(b, err)
@@ -205,8 +209,10 @@ func BenchmarkApplyTransactionWithDynamicFeeTx(b *testing.B) {
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
+		acct, err := suite.app.EvmKeeper.GetAccountOrEmpty(suite.ctx, suite.address)
+		require.NoError(b, err)
 		tx, err := newSignedEthTx(templateDynamicFeeTx,
-			suite.app.EvmKeeper.GetNonce(suite.address),
+			acct.Nonce,
 			sdk.AccAddress(suite.address.Bytes()),
 			suite.signer,
 			ethSigner,
@@ -214,7 +220,7 @@ func BenchmarkApplyTransactionWithDynamicFeeTx(b *testing.B) {
 		require.NoError(b, err)
 
 		b.StartTimer()
-		resp, err := suite.app.EvmKeeper.ApplyTransaction(tx)
+		resp, err := suite.app.EvmKeeper.ApplyTransaction(suite.ctx, tx)
 		b.StopTimer()
 
 		require.NoError(b, err)
@@ -235,8 +241,10 @@ func BenchmarkApplyMessage(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
 
+		acct, err := suite.app.EvmKeeper.GetAccountOrEmpty(suite.ctx, suite.address)
+		require.NoError(b, err)
 		m, err := newNativeMessage(
-			suite.app.EvmKeeper.GetNonce(suite.address),
+			acct.Nonce,
 			suite.ctx.BlockHeight(),
 			suite.address,
 			ethCfg,
@@ -249,7 +257,7 @@ func BenchmarkApplyMessage(b *testing.B) {
 		require.NoError(b, err)
 
 		b.StartTimer()
-		resp, err := suite.app.EvmKeeper.ApplyMessage(m, nil, true)
+		resp, err := suite.app.EvmKeeper.ApplyMessage(suite.ctx, m, nil, true)
 		b.StopTimer()
 
 		require.NoError(b, err)
@@ -270,8 +278,10 @@ func BenchmarkApplyMessageWithLegacyTx(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
 
+		acct, err := suite.app.EvmKeeper.GetAccountOrEmpty(suite.ctx, suite.address)
+		require.NoError(b, err)
 		m, err := newNativeMessage(
-			suite.app.EvmKeeper.GetNonce(suite.address),
+			acct.Nonce,
 			suite.ctx.BlockHeight(),
 			suite.address,
 			ethCfg,
@@ -284,7 +294,7 @@ func BenchmarkApplyMessageWithLegacyTx(b *testing.B) {
 		require.NoError(b, err)
 
 		b.StartTimer()
-		resp, err := suite.app.EvmKeeper.ApplyMessage(m, nil, true)
+		resp, err := suite.app.EvmKeeper.ApplyMessage(suite.ctx, m, nil, true)
 		b.StopTimer()
 
 		require.NoError(b, err)
@@ -305,8 +315,10 @@ func BenchmarkApplyMessageWithDynamicFeeTx(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
 
+		acct, err := suite.app.EvmKeeper.GetAccountOrEmpty(suite.ctx, suite.address)
+		require.NoError(b, err)
 		m, err := newNativeMessage(
-			suite.app.EvmKeeper.GetNonce(suite.address),
+			acct.Nonce,
 			suite.ctx.BlockHeight(),
 			suite.address,
 			ethCfg,
@@ -319,7 +331,7 @@ func BenchmarkApplyMessageWithDynamicFeeTx(b *testing.B) {
 		require.NoError(b, err)
 
 		b.StartTimer()
-		resp, err := suite.app.EvmKeeper.ApplyMessage(m, nil, true)
+		resp, err := suite.app.EvmKeeper.ApplyMessage(suite.ctx, m, nil, true)
 		b.StopTimer()
 
 		require.NoError(b, err)
