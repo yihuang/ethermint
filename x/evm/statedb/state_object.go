@@ -19,6 +19,13 @@ type Account struct {
 	CodeHash []byte
 }
 
+func NewEmptyAccount() *Account {
+	return &Account{
+		Balance:  new(big.Int),
+		CodeHash: emptyCodeHash,
+	}
+}
+
 type Storage map[common.Hash]common.Hash
 
 // SortedKeys sort the keys for deterministic iteration
@@ -51,7 +58,6 @@ type stateObject struct {
 	// unable to deal with database-level errors. Any error that occurs
 	// during a database read is memoized here and will eventually be returned
 	// by StateDB.Commit.
-	dbErr error
 
 	address common.Address
 
@@ -80,13 +86,6 @@ func newObject(db *StateDB, address common.Address, account Account) *stateObjec
 // empty returns whether the account is considered empty.
 func (s *stateObject) empty() bool {
 	return s.account.Nonce == 0 && s.account.Balance.Sign() == 0 && bytes.Equal(s.account.CodeHash, emptyCodeHash)
-}
-
-// setError remembers the first non-nil error it is called with.
-func (s *stateObject) setError(err error) {
-	if s.dbErr == nil {
-		s.dbErr = err
-	}
 }
 
 func (s *stateObject) markSuicided() {

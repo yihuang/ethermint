@@ -66,7 +66,7 @@ func (s *StateDB) Keeper() Keeper {
 	return s.keeper
 }
 
-// Context returns the embeded `sdk.Context`
+// Context returns the embedded `sdk.Context`
 func (s *StateDB) Context() sdk.Context {
 	return s.ctx
 }
@@ -285,7 +285,15 @@ func (s *StateDB) ForEachStorage(addr common.Address, cb func(key, value common.
 	if so == nil {
 		return nil
 	}
-	s.keeper.ForEachStorage(s.ctx, addr, cb)
+	s.keeper.ForEachStorage(s.ctx, addr, func(key, value common.Hash) bool {
+		if value, dirty := so.dirtyStorage[key]; dirty {
+			return cb(key, value)
+		}
+		if len(value) > 0 {
+			return cb(key, value)
+		}
+		return true
+	})
 	return nil
 }
 
@@ -448,11 +456,10 @@ func (s *StateDB) Commit() error {
 	}
 	for _, addr := range s.journal.sortedDirties() {
 		obj := s.stateObjects[addr]
-		if obj.dbErr != nil {
-			return fmt.Errorf("commit aborted due to earlier error: %v", obj.dbErr)
-		}
 		if obj.suicided {
-			s.keeper.PurgeAccount(s.ctx, obj.Address())
+			if err := s.keeper.PurgeAccount(s.ctx, obj.Address()); err != nil {
+				return err
+			}
 		} else {
 			if obj.code != nil && obj.dirtyCode {
 				s.keeper.SetCode(s.ctx, obj.CodeHash(), obj.code)
