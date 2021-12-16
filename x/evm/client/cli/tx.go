@@ -1,18 +1,15 @@
 package cli
 
 import (
-	"bufio"
 	"fmt"
-	"os"
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/flags"
-	"github.com/cosmos/cosmos-sdk/client/input"
+	"github.com/cosmos/cosmos-sdk/client/tx"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
-	rpctypes "github.com/tharsis/ethermint/rpc/ethereum/types"
 	"github.com/tharsis/ethermint/x/evm/types"
 )
 
@@ -55,54 +52,10 @@ func NewRawTxCmd() *cobra.Command {
 				return err
 			}
 
-			rsp, err := rpctypes.NewQueryClient(clientCtx).Params(cmd.Context(), &types.QueryParamsRequest{})
-			if err != nil {
-				return err
-			}
+			txf := tx.NewFactoryCLI(clientCtx, cmd.Flags()).
+				WithTxConfig(clientCtx.TxConfig).WithAccountRetriever(clientCtx.AccountRetriever)
 
-			tx, err := msg.BuildTx(clientCtx.TxConfig.NewTxBuilder(), rsp.Params.EvmDenom)
-			if err != nil {
-				return err
-			}
-
-			if clientCtx.GenerateOnly {
-				json, err := clientCtx.TxConfig.TxJSONEncoder()(tx)
-				if err != nil {
-					return err
-				}
-
-				return clientCtx.PrintString(fmt.Sprintf("%s\n", json))
-			}
-
-			if !clientCtx.SkipConfirm {
-				out, err := clientCtx.TxConfig.TxJSONEncoder()(tx)
-				if err != nil {
-					return err
-				}
-
-				_, _ = fmt.Fprintf(os.Stderr, "%s\n\n", out)
-
-				buf := bufio.NewReader(os.Stdin)
-				ok, err := input.GetConfirmation("confirm transaction before signing and broadcasting", buf, os.Stderr)
-
-				if err != nil || !ok {
-					_, _ = fmt.Fprintf(os.Stderr, "%s\n", "canceled transaction")
-					return err
-				}
-			}
-
-			txBytes, err := clientCtx.TxConfig.TxEncoder()(tx)
-			if err != nil {
-				return err
-			}
-
-			// broadcast to a Tendermint node
-			res, err := clientCtx.BroadcastTx(txBytes)
-			if err != nil {
-				return err
-			}
-
-			return clientCtx.PrintProto(res)
+			return tx.GenerateOrBroadcastTxWithFactory(clientCtx, txf, msg)
 		},
 	}
 
