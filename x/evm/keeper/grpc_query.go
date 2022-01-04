@@ -226,6 +226,13 @@ func (k Keeper) EthCall(c context.Context, req *types.EthCallRequest) (*types.Ms
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
+	// ApplyMessageWithConfig expect correct nonce set in msg
+	nonce, err := k.GetNonce(ctx, args.GetFrom())
+	if err != nil {
+		nonce = 0
+	}
+	args.Nonce = (*hexutil.Uint64)(&nonce)
+
 	msg, err := args.ToMessage(req.GasCap, cfg.BaseFee)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
@@ -294,6 +301,13 @@ func (k Keeper) EstimateGas(c context.Context, req *types.EthCallRequest) (*type
 	}
 
 	txConfig := statedb.NewEmptyTxConfig(common.BytesToHash(ctx.HeaderHash().Bytes()))
+
+	// ApplyMessageWithConfig expect correct nonce set in msg
+	nonce, err := k.GetNonce(ctx, args.GetFrom())
+	if err != nil {
+		nonce = 0
+	}
+	args.Nonce = (*hexutil.Uint64)(&nonce)
 
 	// Create a helper to check if a gas allowance results in an executable transaction
 	executable := func(gas uint64) (vmerror bool, rsp *types.MsgEthereumTxResponse, err error) {
