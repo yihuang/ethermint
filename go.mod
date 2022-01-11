@@ -3,7 +3,7 @@ module github.com/tharsis/ethermint
 go 1.15
 
 require (
-	github.com/armon/go-metrics v0.3.9
+	github.com/armon/go-metrics v0.3.10
 	github.com/aws/aws-sdk-go v1.38.21 // indirect
 	github.com/bitly/go-simplejson v0.5.0 // indirect
 	github.com/btcsuite/btcd v0.22.0-beta
