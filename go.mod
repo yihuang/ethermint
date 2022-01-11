@@ -6,6 +6,7 @@ require (
 	github.com/armon/go-metrics v0.3.9
 	github.com/aws/aws-sdk-go v1.38.21 // indirect
 	github.com/bitly/go-simplejson v0.5.0 // indirect
+	github.com/bmizerany/assert v0.0.0-20160611221934-b7ed37b82869 // indirect
 	github.com/btcsuite/btcd v0.22.0-beta
 	github.com/btcsuite/btcutil v1.0.3-0.20201208143702-a53e38424cce
 	github.com/bugsnag/bugsnag-go v2.1.0+incompatible // indirect
@@ -43,7 +44,7 @@ require (
 	github.com/tendermint/tm-db v0.6.4
 	github.com/tyler-smith/go-bip39 v1.1.0
 	github.com/xlab/closer v0.0.0-20190328110542-03326addb7c2
-	github.com/xlab/suplog v1.3.0
+	github.com/xlab/suplog v1.3.1
 	golang.org/x/crypto v0.0.0-20210711020723-a769d52b0f97 // indirect
 	google.golang.org/genproto v0.0.0-20210712171009-5404628d0f46
 	google.golang.org/grpc v1.39.0
