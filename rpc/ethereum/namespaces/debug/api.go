@@ -89,6 +89,11 @@ func (a *API) TraceTransaction(hash common.Hash, config *evmtypes.TraceConfig) (
 		return nil, err
 	}
 
+	msgIndex, _ := rpctypes.FindTxAttributes(transaction.TxResult.Events, hash.Hex())
+	if msgIndex < 0 {
+		return nil, fmt.Errorf("ethereum tx not found in msgs: %s", hash.Hex())
+	}
+
 	// check tx index is not out of bound
 	if uint32(len(blk.Block.Txs)) < transaction.Index {
 		a.logger.Debug("tx index out of bounds", "index", transaction.Index, "hash", hash.String(), "height", blk.Block.Height)
@@ -103,13 +108,14 @@ func (a *API) TraceTransaction(hash common.Hash, config *evmtypes.TraceConfig) (
 			a.logger.Debug("failed to decode transaction in block", "height", blk.Block.Height, "error", err.Error())
 			continue
 		}
-		msg := tx.GetMsgs()[0]
-		ethMsg, ok := msg.(*evmtypes.MsgEthereumTx)
-		if !ok {
-			continue
-		}
+		for _, msg := range tx.GetMsgs() {
+			ethMsg, ok := msg.(*evmtypes.MsgEthereumTx)
+			if !ok {
+				continue
+			}
 
-		predecessors = append(predecessors, ethMsg)
+			predecessors = append(predecessors, ethMsg)
+		}
 	}
 
 	tx, err := a.clientCtx.TxConfig.TxDecoder()(transaction.Tx)
@@ -118,7 +124,16 @@ func (a *API) TraceTransaction(hash common.Hash, config *evmtypes.TraceConfig) (
 		return nil, err
 	}
 
-	ethMessage, ok := tx.GetMsgs()[0].(*evmtypes.MsgEthereumTx)
+	// add predecessor messages in current cosmos tx
+	for i := 0; i < msgIndex; i++ {
+		ethMsg, ok := tx.GetMsgs()[i].(*evmtypes.MsgEthereumTx)
+		if !ok {
+			continue
+		}
+		predecessors = append(predecessors, ethMsg)
+	}
+
+	ethMessage, ok := tx.GetMsgs()[msgIndex].(*evmtypes.MsgEthereumTx)
 	if !ok {
 		a.logger.Debug("invalid transaction type", "type", fmt.Sprintf("%T", tx))
 		return nil, fmt.Errorf("invalid transaction type %T", tx)
@@ -218,16 +233,14 @@ func (a *API) traceBlock(height rpctypes.BlockNumber, config *evmtypes.TraceConf
 			continue
 		}
 
-		messages := decodedTx.GetMsgs()
-		if len(messages) == 0 {
-			continue
+		for _, msg := range decodedTx.GetMsgs() {
+			ethMessage, ok := msg.(*evmtypes.MsgEthereumTx)
+			if !ok {
+				// Just considers Ethereum transactions
+				continue
+			}
+			txsMessages = append(txsMessages, ethMessage)
 		}
-		ethMessage, ok := messages[0].(*evmtypes.MsgEthereumTx)
-		if !ok {
-			// Just considers Ethereum transactions
-			continue
-		}
-		txsMessages = append(txsMessages, ethMessage)
 	}
 
 	// minus one to get the context at the beginning of the block

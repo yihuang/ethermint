@@ -691,39 +691,21 @@ func (e *PublicAPI) GetTransactionByHash(hash common.Hash) (*rpctypes.RPCTransac
 // getTransactionByBlockAndIndex is the common code shared by `GetTransactionByBlockNumberAndIndex` and `GetTransactionByBlockHashAndIndex`.
 func (e *PublicAPI) getTransactionByBlockAndIndex(block *tmrpctypes.ResultBlock, idx hexutil.Uint) (*rpctypes.RPCTransaction, error) {
 	var msg *evmtypes.MsgEthereumTx
-	// try /tx_search first
-	res, err := e.backend.GetTxByTxIndex(block.Block.Height, uint(idx))
-	if err == nil {
-		tx, err := e.clientCtx.TxConfig.TxDecoder()(res.Tx)
-		if err != nil {
-			e.logger.Debug("invalid ethereum tx", "height", block.Block.Header, "index", idx)
-			return nil, nil
-		}
-		if len(tx.GetMsgs()) != 1 {
-			e.logger.Debug("invalid ethereum tx", "height", block.Block.Header, "index", idx)
-			return nil, nil
-		}
-		var ok bool
-		msg, ok = tx.GetMsgs()[0].(*evmtypes.MsgEthereumTx)
-		if !ok {
-			e.logger.Debug("invalid ethereum tx", "height", block.Block.Header, "index", idx)
-			return nil, nil
-		}
-	} else {
-		blockRes, err := e.clientCtx.Client.BlockResults(e.ctx, &block.Block.Height)
-		if err != nil {
-			return nil, nil
-		}
-
-		i := int(idx)
-		ethMsgs := e.backend.GetEthereumMsgsFromTendermintBlock(block, blockRes)
-		if i >= len(ethMsgs) {
-			e.logger.Debug("block txs index out of bound", "index", i)
-			return nil, nil
-		}
-
-		msg = ethMsgs[i]
+	// "/tx_search" don't work with batch tx (multiple messges in one cosmos tx),
+	// so just iterate through the block and results.
+	blockRes, err := e.clientCtx.Client.BlockResults(e.ctx, &block.Block.Height)
+	if err != nil {
+		return nil, nil
 	}
+
+	i := int(idx)
+	ethMsgs := e.backend.GetEthereumMsgsFromTendermintBlock(block, blockRes)
+	if i >= len(ethMsgs) {
+		e.logger.Debug("block txs index out of bound", "index", i)
+		return nil, nil
+	}
+
+	msg = ethMsgs[i]
 
 	return rpctypes.NewTransactionFromMsg(
 		msg,
