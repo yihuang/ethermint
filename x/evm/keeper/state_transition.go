@@ -114,7 +114,7 @@ func (k Keeper) VMConfig(ctx sdk.Context, msg core.Message, cfg *types.EVMConfig
 		Tracer:      tracer,
 		NoRecursion: false, // TODO: consider disabling recursion though params
 		NoBaseFee:   noBaseFee,
-		ExtraEips:   params.EIPs(),
+		ExtraEips:   cfg.Params.EIPs(),
 	}
 }
 
