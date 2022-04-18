@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strconv"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
@@ -250,4 +251,42 @@ func ParseTxLogsFromEvent(event abci.Event) ([]*ethtypes.Log, error) {
 		logs = append(logs, &log)
 	}
 	return evmtypes.LogsToEthereum(logs), nil
+}
+
+// ParseEthTxEvents parse eth attributes and logs for all messages in cosmos events.
+func ParseEthTxEvents(events []abci.Event) (msgs []types.EthMsgEventParsed, err error) {
+	var msg *types.EthMsgEventParsed
+	for _, event := range events {
+		if event.Type == evmtypes.EventTypeEthereumTx {
+			// begining of a new message, finalize the last one
+			if msg != nil {
+				msgs = append(msgs, *msg)
+			}
+			msg = &types.EthMsgEventParsed{}
+			for _, attr := range event.Attributes {
+				if string(attr.Key) == evmtypes.AttributeKeyTxGasUsed {
+					msg.GasUsed, err = strconv.ParseUint(string(attr.Value), 10, 64)
+					if err != nil {
+						return nil, err
+					}
+				} else if string(attr.Key) == evmtypes.AttributeKeyTxIndex {
+					msg.TxIndex, err = strconv.ParseUint(string(attr.Value), 10, 64)
+					if err != nil {
+						return nil, err
+					}
+				} else if string(attr.Key) == evmtypes.AttributeKeyEthereumTxFailed {
+					msg.Failed = true
+				}
+			}
+		} else if event.Type == evmtypes.EventTypeTxLog {
+			msg.Logs, err = ParseTxLogsFromEvent(event)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	if msg != nil {
+		msgs = append(msgs, *msg)
+	}
+	return
 }

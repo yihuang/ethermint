@@ -1005,7 +1005,7 @@ func (e *PublicAPI) GetTransactionReceiptsByBlock(blockNrOrHash rpctypes.BlockNu
 			return nil, fmt.Errorf("failed to decode tx: %w", err)
 		}
 
-		msgEvents, err := rpctypes.ParseEthTxEvents(txResult.Events)
+		msgEvents, err := backend.ParseEthTxEvents(txResult.Events)
 		if err != nil {
 			e.logger.Debug("parse tx events failed", "txIndex", txIndex, "error", err.Error())
 			return nil, fmt.Errorf("failed to parse tx events: %d %w", txIndex, err)
