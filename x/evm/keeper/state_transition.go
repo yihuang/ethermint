@@ -1,8 +1,10 @@
 package keeper
 
 import (
+	"bytes"
 	"math"
 	"math/big"
+	"sort"
 
 	tmtypes "github.com/tendermint/tendermint/types"
 
@@ -75,6 +77,7 @@ func (k *Keeper) NewEVM(
 	cfg *types.EVMConfig,
 	tracer vm.EVMLogger,
 	stateDB vm.StateDB,
+	contracts map[common.Address]statedb.StatefulPrecompiledContract,
 ) *vm.EVM {
 	blockCtx := vm.BlockContext{
 		CanTransfer: core.CanTransfer,
@@ -93,7 +96,16 @@ func (k *Keeper) NewEVM(
 		tracer = k.Tracer(ctx, msg, cfg.ChainConfig)
 	}
 	vmConfig := k.VMConfig(ctx, msg, cfg, tracer)
-	return vm.NewEVM(blockCtx, txCtx, stateDB, cfg.ChainConfig, vmConfig)
+
+	rules := cfg.ChainConfig.Rules(big.NewInt(ctx.BlockHeight()), cfg.ChainConfig.MergeForkBlock != nil)
+	precompiles := make(map[common.Address]vm.PrecompiledContract)
+	for addr, c := range vm.ActivePrecompiledContracts(rules) {
+		precompiles[addr] = c
+	}
+	for addr, c := range contracts {
+		precompiles[addr] = c
+	}
+	return vm.NewEVMWithPrecompiles(blockCtx, txCtx, stateDB, cfg.ChainConfig, vmConfig, precompiles)
 }
 
 // VMConfig creates an EVM configuration from the debug setting and the extra EIPs enabled on the
@@ -354,8 +366,26 @@ func (k *Keeper) ApplyMessageWithConfig(ctx sdk.Context, msg core.Message, trace
 		return nil, sdkerrors.Wrap(types.ErrCallDisabled, "failed to call contract")
 	}
 
-	stateDB := statedb.New(ctx, k, txConfig)
-	evm := k.NewEVM(ctx, msg, cfg, tracer, stateDB)
+	// construct precompiles
+	contracts := make(map[common.Address]statedb.StatefulPrecompiledContract, len(k.precompiles))
+	sortedContracts := make([]common.Address, 0, len(k.precompiles))
+	for addr, creator := range k.precompiles {
+		c := creator(ctx)
+		contracts[addr] = c
+		sortedContracts = append(sortedContracts, addr)
+	}
+
+	sort.Slice(sortedContracts, func(i, j int) bool {
+		return bytes.Compare(sortedContracts[i].Bytes(), sortedContracts[j].Bytes()) < 0
+	})
+
+	extStates := make([]statedb.ExtState, len(sortedContracts))
+	for i, addr := range sortedContracts {
+		extStates[i] = contracts[addr]
+	}
+
+	stateDB := k.StateDB(ctx, txConfig, extStates)
+	evm := k.NewEVM(ctx, msg, cfg, tracer, stateDB, contracts)
 
 	sender := vm.AccountRef(msg.From())
 	contractCreation := msg.To() == nil
