@@ -53,6 +53,9 @@ type Keeper struct {
 
 	// EVM Hooks for tx post-processing
 	hooks types.EvmHooks
+
+	// Stateful EVM precompiled contracts
+	precompiles map[common.Address]statedb.PrecompiledContractCreator
 }
 
 // NewKeeper generates new evm module keeper
@@ -62,6 +65,7 @@ func NewKeeper(
 	ak types.AccountKeeper, bankKeeper types.BankKeeper, sk types.StakingKeeper,
 	fmk types.FeeMarketKeeper,
 	tracer string,
+	precompiles map[common.Address]statedb.PrecompiledContractCreator,
 ) *Keeper {
 	// ensure evm module account is set
 	if addr := ak.GetModuleAddress(types.ModuleName); addr == nil {
@@ -84,6 +88,7 @@ func NewKeeper(
 		storeKey:        storeKey,
 		transientKey:    transientKey,
 		tracer:          tracer,
+		precompiles:     precompiles,
 	}
 }
 
@@ -340,4 +345,9 @@ func (k Keeper) AddTransientGasUsed(ctx sdk.Context, gasUsed uint64) (uint64, er
 	}
 	k.SetTransientGasUsed(ctx, result)
 	return result, nil
+}
+
+// StateDB creates a StateDB instance
+func (k Keeper) StateDB(ctx sdk.Context, txConfig statedb.TxConfig, extStates []statedb.ExtState) *statedb.StateDB {
+	return statedb.New(ctx, &k, txConfig, extStates)
 }

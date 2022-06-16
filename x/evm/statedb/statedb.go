@@ -50,24 +50,36 @@ type StateDB struct {
 
 	// Per-transaction access list
 	accessList *accessList
+
+	// extended states
+	extStates []ExtState
 }
 
 // New creates a new state from a given trie.
-func New(ctx sdk.Context, keeper Keeper, txConfig TxConfig) *StateDB {
-	return &StateDB{
+func New(ctx sdk.Context, keeper Keeper, txConfig TxConfig, extStates []ExtState) *StateDB {
+	statedb := &StateDB{
 		keeper:       keeper,
 		ctx:          ctx,
 		stateObjects: make(map[common.Address]*stateObject),
 		journal:      newJournal(),
 		accessList:   newAccessList(),
 
-		txConfig: txConfig,
+		txConfig:  txConfig,
+		extStates: extStates,
 	}
+
+	return statedb
 }
 
 // Keeper returns the underlying `Keeper`
 func (s *StateDB) Keeper() Keeper {
 	return s.keeper
+}
+
+// AppendJournalEntry allow external module to append journal entry,
+// to support snapshot revert for external states.
+func (s *StateDB) AppendJournalEntry(entry JournalEntry) {
+	s.journal.append(entry)
 }
 
 // AddLog adds a log, called by evm.
@@ -429,7 +441,7 @@ func (s *StateDB) RevertToSnapshot(revid int) {
 	snapshot := s.validRevisions[idx].journalIndex
 
 	// Replay the journal to undo changes and remove invalidated snapshots
-	s.journal.revert(s, snapshot)
+	s.journal.Revert(s, snapshot)
 	s.validRevisions = s.validRevisions[:idx]
 }
 
@@ -457,6 +469,12 @@ func (s *StateDB) Commit() error {
 				}
 				s.keeper.SetState(s.ctx, obj.Address(), key, value.Bytes())
 			}
+		}
+	}
+	// commit the extended states
+	for _, ext := range s.extStates {
+		if err := ext.Commit(s.ctx); err != nil {
+			return err
 		}
 	}
 	return nil
