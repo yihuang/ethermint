@@ -60,7 +60,12 @@ func (esvd EthSigVerificationDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, s
 			)
 		}
 
-		// set up the sender to the transaction field if not already
+		if ctx.IsCheckTx() {
+			// Validate `From` field
+			if msgEthTx.From != sender.Hex() {
+				return ctx, sdkerrors.Wrapf(sdkerrors.ErrUnknownRequest, "invalid From %s, expected: %s", msgEthTx.From, sender.Hex())
+			}
+		}
 		msgEthTx.From = sender.Hex()
 	}
 
@@ -421,6 +426,21 @@ func (vbd EthValidateBasicDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simu
 			if !ok {
 				return ctx, sdkerrors.Wrapf(sdkerrors.ErrUnknownRequest, "invalid message type %T, expected %T", msg, (*evmtypes.MsgEthereumTx)(nil))
 			}
+
+			expHash := msgEthTx.AsTransaction().Hash().Hex()
+			if ctx.IsCheckTx() {
+				// Validate Size_ field, should be kept empty
+				if msgEthTx.Size_ != 0 {
+					return ctx, sdkerrors.Wrapf(sdkerrors.ErrUnknownRequest, "dirty tx size field %f, expected: 0", msgEthTx.Size_)
+				}
+				// Validate Hash field
+				if msgEthTx.Hash != expHash {
+					return ctx, sdkerrors.Wrapf(sdkerrors.ErrUnknownRequest, "invalid tx hash %s, expected: %s", msgEthTx.Hash, expHash)
+				}
+			}
+			msgEthTx.Size_ = 0
+			msgEthTx.Hash = expHash
+
 			txGasLimit += msgEthTx.GetGas()
 
 			txData, err := evmtypes.UnpackTxData(msgEthTx.Data)

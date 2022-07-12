@@ -484,14 +484,9 @@ func (e *PublicAPI) SendRawTransaction(data hexutil.Bytes) (common.Hash, error) 
 		return common.Hash{}, err
 	}
 
-	ethereumTx := &evmtypes.MsgEthereumTx{}
-	if err := ethereumTx.FromEthereumTx(tx); err != nil {
-		e.logger.Error("transaction converting failed", "error", err.Error())
-		return common.Hash{}, err
-	}
-
-	if err := ethereumTx.ValidateBasic(); err != nil {
-		e.logger.Debug("tx failed basic validation", "error", err.Error())
+	bn, err := e.backend.BlockNumber()
+	if err != nil {
+		e.logger.Debug("failed to fetch latest block number", "error", err.Error())
 		return common.Hash{}, err
 	}
 
@@ -499,6 +494,27 @@ func (e *PublicAPI) SendRawTransaction(data hexutil.Bytes) (common.Hash, error) 
 	res, err := e.queryClient.QueryClient.Params(e.ctx, &evmtypes.QueryParamsRequest{})
 	if err != nil {
 		e.logger.Error("failed to query evm params", "error", err.Error())
+		return common.Hash{}, err
+	}
+
+	// Verify tx signature and recover sender
+	ethCfg := res.Params.ChainConfig.EthereumConfig(e.chainIDEpoch)
+	signer := ethtypes.MakeSigner(ethCfg, new(big.Int).SetUint64(uint64(bn)))
+	sender, err := signer.Sender(tx)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	ethereumTx := &evmtypes.MsgEthereumTx{
+		From: sender.Hex(),
+	}
+	if err := ethereumTx.FromEthereumTx(tx); err != nil {
+		e.logger.Error("transaction converting failed", "error", err.Error())
+		return common.Hash{}, err
+	}
+
+	if err := ethereumTx.ValidateBasic(); err != nil {
+		e.logger.Debug("tx failed basic validation", "error", err.Error())
 		return common.Hash{}, err
 	}
 

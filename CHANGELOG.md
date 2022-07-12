@@ -42,6 +42,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (rpc) [tharsis#1059](https://github.com/tharsis/ethermint/pull/1059) Remove unnecessary event filtering logic on the `eth_baseFee` JSON-RPC endpoint.
 * (rpc) [tharsis#1082](https://github.com/tharsis/ethermint/pull/1082) fix gas price returned in getTransaction api.
 * (ante) [tharsis#1062](https://github.com/tharsis/ethermint/pull/1062) Emit event of eth tx hash in ante handler to support query failed transactions.
+* (ante) [#1176](https://github.com/evmos/ethermint/pull/1176) Fix invalid tx hashes; Remove `Size_` field and validate `Hash`/`From` fields in ante handler,
 
 ### API Breaking
 
