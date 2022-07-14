@@ -27,26 +27,35 @@ func (suite AnteTestSuite) TestEthSigVerificationDecorator() {
 	err := signedTx.Sign(suite.ethSigner, tests.NewSigner(privKey))
 	suite.Require().NoError(err)
 
+	unprotectedTx := evmtypes.NewTxContract(nil, 1, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil)
+	unprotectedTx.From = addr.Hex()
+	err = unprotectedTx.Sign(ethtypes.HomesteadSigner{}, tests.NewSigner(privKey))
+	suite.Require().NoError(err)
+
 	testCases := []struct {
 		name      string
 		tx        sdk.Tx
+		checkTx   bool
 		reCheckTx bool
 		expPass   bool
 	}{
-		{"ReCheckTx", &invalidTx{}, true, false},
-		{"invalid transaction type", &invalidTx{}, false, false},
+		{"ReCheckTx", &invalidTx{}, true, true, false},
+		{"invalid transaction type", &invalidTx{}, true, false, false},
 		{
 			"invalid sender",
 			evmtypes.NewTx(suite.app.EvmKeeper.ChainID(), 1, &addr, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil),
+			true,
 			false,
 			false,
 		},
-		{"successful signature verification", signedTx, false, true},
+		{"successful signature verification", signedTx, true, false, true},
+		{"invalid, not replay-protected", unprotectedTx, true, false, false},
+		{"successful, don't reject unprotected", unprotectedTx, false, false, true},
 	}
 
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
-			_, err := dec.AnteHandle(suite.ctx.WithIsReCheckTx(tc.reCheckTx), tc.tx, false, nextFn)
+			_, err := dec.AnteHandle(suite.ctx.WithIsCheckTx(tc.checkTx).WithIsReCheckTx(tc.reCheckTx), tc.tx, false, nextFn)
 
 			if tc.expPass {
 				suite.Require().NoError(err)
