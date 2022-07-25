@@ -98,7 +98,8 @@ func (bc *BankContract) Run(evm *vm.EVM, input []byte, caller common.Address, va
 
 	// parse input
 	methodID := input[:4]
-	if bytes.Equal(methodID, MintMethod.ID) {
+	switch string(methodID) {
+	case string(MintMethod.ID):
 		if readonly {
 			return nil, errors.New("the method is not readonly")
 		}
@@ -129,7 +130,8 @@ func (bc *BankContract) Run(evm *vm.EVM, input []byte, caller common.Address, va
 			}
 		}
 		stateDB.AppendJournalEntry(bankMintChange{bc: bc, caller: caller, recipient: recipient, amount: amount})
-	} else if bytes.Equal(methodID, BalanceOfMethod.ID) {
+		return nil, nil
+	case string(BalanceOfMethod.ID):
 		args, err := BalanceOfMethod.Inputs.Unpack(input[4:])
 		if err != nil {
 			return nil, errors.New("fail to unpack input arguments")
@@ -144,10 +146,9 @@ func (bc *BankContract) Run(evm *vm.EVM, input []byte, caller common.Address, va
 		// query from storage
 		amount := bc.bankKeeper.GetBalance(bc.ctx, sdk.AccAddress(addr.Bytes()), EVMDenom(token)).Amount.BigInt()
 		return BalanceOfMethod.Outputs.Pack(amount)
-	} else {
+	default:
 		return nil, errors.New("unknown method")
 	}
-	return nil, nil
 }
 
 func (bc *BankContract) Commit(ctx sdk.Context) error {
