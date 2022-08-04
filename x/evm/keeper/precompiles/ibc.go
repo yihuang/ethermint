@@ -43,15 +43,6 @@ func init() {
 			Name: "channelID",
 			Type: stringType,
 		}, abi.Argument{
-			Name: "sender",
-			Type: addressType,
-		}, abi.Argument{
-			Name: "receiver",
-			Type: stringType,
-		}, abi.Argument{
-			Name: "amount",
-			Type: uint256Type,
-		}, abi.Argument{
 			Name: "srcDenom",
 			Type: stringType,
 		}, abi.Argument{
@@ -62,6 +53,15 @@ func init() {
 			Type: uint256Type,
 		}, abi.Argument{
 			Name: "timeout",
+			Type: uint256Type,
+		}, abi.Argument{
+			Name: "sender",
+			Type: addressType,
+		}, abi.Argument{
+			Name: "receiver",
+			Type: stringType,
+		}, abi.Argument{
+			Name: "amount",
 			Type: uint256Type,
 		}},
 		abi.Arguments{abi.Argument{
@@ -143,18 +143,18 @@ func (ic *IbcContract) Run(evm *vm.EVM, input []byte, caller common.Address, val
 		}
 		portID := args[0].(string)
 		channelID := args[1].(string)
-		sender := args[2].(common.Address)
-		receiver := args[3].(string)
-		amount := args[4].(*big.Int)
+		srcDenom := args[2].(string)
+		dstDenom := args[3].(string)
+		ratio := args[4].(*big.Int)
+		timeout := args[5].(*big.Int)
+		sender := args[6].(common.Address)
+		receiver := args[7].(string)
+		amount := args[8].(*big.Int)
 		if amount.Sign() <= 0 {
 			return nil, errors.New("invalid amount")
 		}
-		srcDenom := args[5].(string)
-		dstDenom := args[6].(string)
-		ratio := args[7].(*big.Int)
-		timeout := args[8].(*big.Int)
-		timeoutTimestamp := timeout.Uint64()
-		timeoutHeight := clienttypes.NewHeight(1, 1000)
+		timeoutTimestamp := uint64(ic.ctx.BlockTime().UnixNano()) + timeout.Uint64()
+		timeoutHeight := clienttypes.ZeroHeight()
 		fmt.Printf(
 			"TransferMethod portID: %s, channelID: %s, sender:%s, receiver: %s, amount: %s, srcDenom: %s, dstDenom: %s, timeoutTimestamp: %d, timeoutHeight: %s\n",
 			portID, channelID, sender, receiver, amount.String(), srcDenom, dstDenom, timeoutTimestamp, timeoutHeight,
