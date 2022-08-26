@@ -42,5 +42,17 @@ func BenchIAVL() {
 		panic(err)
 	}
 
-	fmt.Println("iavl db size", db.Stats()["database.size"])
+	// sum the size of keys and values
+	var size int
+	iter, _ := db.Iterator(nil, nil)
+	for {
+		if !iter.Valid() {
+			break
+		}
+		size += len(iter.Key())
+		size += len(iter.Value())
+		iter.Next()
+	}
+
+	fmt.Println("iavl db size, nodes:", db.Stats()["database.size"], ", size:", size)
 }

@@ -71,5 +71,12 @@ func BenchMPT() {
 		panic(err)
 	}
 
-	fmt.Println("mpt db size", kvdb.Len())
+	var size int
+	iter := kvdb.NewIterator(nil, nil)
+	for iter.Next() {
+		size += len(iter.Key())
+		size += len(iter.Value())
+	}
+
+	fmt.Println("mpt db size, nodes:", kvdb.Len(), "size:", size)
 }
