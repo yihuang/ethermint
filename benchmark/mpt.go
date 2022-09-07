@@ -62,11 +62,11 @@ func MockWritesMPT(stdb state.Database, blocks int, writesPerContract int) (comm
 	return root, nil
 }
 
-func BenchMPT() {
+func BenchMPT(blocks int, writesPerContract int) {
 	kvdb := memorydb.New()
 	db := rawdb.NewDatabase(kvdb)
 	stdb := state.NewDatabaseWithConfig(db, &trie.Config{Preimages: false})
-	_, err := MockWritesMPT(stdb, 100, 100)
+	_, err := MockWritesMPT(stdb, blocks, writesPerContract)
 	if err != nil {
 		panic(err)
 	}

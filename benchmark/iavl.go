@@ -4,9 +4,8 @@ import (
 	"fmt"
 
 	"github.com/cosmos/cosmos-sdk/store/iavl"
-	"github.com/cosmos/cosmos-sdk/store/prefix"
 	storetypes "github.com/cosmos/cosmos-sdk/store/types"
-	evmtypes "github.com/evmos/ethermint/x/evm/types"
+	"github.com/tendermint/tendermint/libs/log"
 	dbm "github.com/tendermint/tm-db"
 )
 
@@ -14,30 +13,29 @@ var (
 	ModulePrefix = "s/k:evm/"
 )
 
-func MockWritesIAVL(kvstore storetypes.CommitKVStore, blocks int, writesPerContract int) error {
+func MockWritesIAVL(store storetypes.CommitKVStore, blocks int, writesPerContract int) error {
 	contracts := GenMockContracts()
 	for b := 0; b < blocks; b++ {
 		for _, c := range contracts {
-			store := prefix.NewStore(kvstore, evmtypes.AddressStoragePrefix(c.Address))
 			for k, v := range c.GenSlotUpdates(writesPerContract) {
 				store.Set(k.Bytes(), v.Bytes())
 			}
 		}
-		kvstore.Commit()
+		store.Commit()
 	}
 	return nil
 }
 
-func BenchIAVL() {
+func BenchIAVL(blocks int, writesPerContract int) {
 	db := dbm.NewMemDB()
 	storeDB := dbm.NewPrefixDB(db, []byte(ModulePrefix))
 	// storeKey := storetypes.NewKVStoreKey("evm")
 	id := storetypes.CommitID{}
-	store, err := iavl.LoadStore(storeDB, id, false, iavl.DefaultIAVLCacheSize)
+	store, err := iavl.LoadStore(storeDB, log.NewNopLogger(), storetypes.NewKVStoreKey("evm"), id, false, iavl.DefaultIAVLCacheSize)
 	if err != nil {
 		panic(err)
 	}
-	err = MockWritesIAVL(store, 100, 100)
+	err = MockWritesIAVL(store, blocks, writesPerContract)
 	if err != nil {
 		panic(err)
 	}
