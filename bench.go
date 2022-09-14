@@ -7,4 +7,5 @@ func main() {
 	writesPerContract := 100
 	benchmark.BenchIAVL(blocks, writesPerContract)
 	benchmark.BenchMPT(blocks, writesPerContract)
+	benchmark.BenchV2Store(blocks, writesPerContract)
 }
