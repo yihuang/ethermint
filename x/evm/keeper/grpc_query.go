@@ -374,6 +374,8 @@ func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*typ
 	ctx = ctx.WithBlockHeight(contextHeight)
 	ctx = ctx.WithBlockTime(req.BlockTime)
 	ctx = ctx.WithHeaderHash(common.Hex2Bytes(req.BlockHash))
+	ctx = ctx.WithChainID("cronostestnet_338-3")
+	k.WithChainID(ctx)
 	cfg, err := k.EVMConfig(ctx, GetProposerAddress(ctx, req.ProposerAddress))
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to load evm config: %s", err.Error())
