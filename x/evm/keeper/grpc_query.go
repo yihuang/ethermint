@@ -217,10 +217,7 @@ func (k Keeper) EthCall(c context.Context, req *types.EthCallRequest) (*types.Ms
 	}
 
 	ctx := sdk.UnwrapSDKContext(c)
-	if len(req.ChainId) > 0 {
-		ctx = ctx.WithChainID(req.ChainId)
-		k.WithChainID(ctx)
-	}
+	k.SetWithChainID(ctx, req.ChainId)
 
 	var args types.TransactionArgs
 	err := json.Unmarshal(req.Args, &args)
@@ -260,10 +257,7 @@ func (k Keeper) EstimateGas(c context.Context, req *types.EthCallRequest) (*type
 	}
 
 	ctx := sdk.UnwrapSDKContext(c)
-	if len(req.ChainId) > 0 {
-		ctx = ctx.WithChainID(req.ChainId)
-		k.WithChainID(ctx)
-	}
+	k.SetWithChainID(ctx, req.ChainId)
 
 	if req.GasCap < ethparams.TxGas {
 		return nil, status.Error(codes.InvalidArgument, "gas cap cannot be lower than 21,000")
@@ -382,11 +376,7 @@ func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*typ
 	ctx = ctx.WithBlockHeight(contextHeight)
 	ctx = ctx.WithBlockTime(req.BlockTime)
 	ctx = ctx.WithHeaderHash(common.Hex2Bytes(req.BlockHash))
-	if len(req.ChainId) > 0 {
-		ctx = ctx.WithChainID(req.ChainId)
-		k.WithChainID(ctx)
-	}
-
+	k.SetWithChainID(ctx, req.ChainId)
 	cfg, err := k.EVMConfig(ctx, GetProposerAddress(ctx, req.ProposerAddress))
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to load evm config: %s", err.Error())
@@ -414,7 +404,6 @@ func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*typ
 	if len(req.Predecessors) > 0 {
 		txConfig.TxIndex++
 	}
-
 	result, _, err := k.traceTx(ctx, cfg, txConfig, signer, tx, req.TraceConfig, false)
 	if err != nil {
 		// error will be returned with detail status from traceTx
@@ -454,10 +443,7 @@ func (k Keeper) TraceBlock(c context.Context, req *types.QueryTraceBlockRequest)
 	ctx = ctx.WithBlockHeight(contextHeight)
 	ctx = ctx.WithBlockTime(req.BlockTime)
 	ctx = ctx.WithHeaderHash(common.Hex2Bytes(req.BlockHash))
-	if len(req.ChainId) > 0 {
-		ctx = ctx.WithChainID(req.ChainId)
-		k.WithChainID(ctx)
-	}
+	k.SetWithChainID(ctx, req.ChainId)
 
 	cfg, err := k.EVMConfig(ctx, GetProposerAddress(ctx, req.ProposerAddress))
 	if err != nil {
@@ -594,4 +580,12 @@ func (k Keeper) BaseFee(c context.Context, _ *types.QueryBaseFeeRequest) (*types
 	}
 
 	return res, nil
+}
+
+// SetWithChainID set ChainID when provided ChainID is not empty and context's ChainID is empty.
+func (k *Keeper) SetWithChainID(ctx sdk.Context, chainId string) {
+	if len(chainId) > 0 && ctx.ChainID() == "" {
+		ctx = ctx.WithChainID(chainId)
+		k.WithChainID(ctx)
+	}
 }

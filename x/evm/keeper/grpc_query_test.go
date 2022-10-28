@@ -1389,3 +1389,44 @@ func (suite *KeeperTestSuite) TestEmptyRequest() {
 		})
 	}
 }
+
+func (suite *KeeperTestSuite) TestSetWithChainID() {
+	keeper := suite.app.EvmKeeper
+	chainID := keeper.ChainID()
+	newChainIDStr := "ethermint_9000-1"
+	newChainID, err := ethermint.ParseChainID(newChainIDStr)
+	suite.Require().NoError(err)
+	suite.Require().Equal(newChainID, chainID)
+
+	testCases := []struct {
+		msg   string
+		c     sdk.Context
+		id    string
+		expId *big.Int
+	}{
+		{
+			"valid chainID provided with exist context chainID",
+			suite.ctx,
+			newChainIDStr,
+			chainID,
+		},
+		{
+			"empty chainID provided",
+			suite.ctx,
+			"",
+			chainID,
+		},
+		{
+			"valid chainID provided with no context chainID",
+			sdk.Context{},
+			newChainIDStr,
+			newChainID,
+		},
+	}
+	for _, tc := range testCases {
+		suite.Run(fmt.Sprintf("Case %s", tc.msg), func() {
+			keeper.SetWithChainID(tc.c, tc.id)
+			suite.Require().Equal(keeper.ChainID(), tc.expId)
+		})
+	}
+}
