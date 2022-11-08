@@ -79,6 +79,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (state) [#1320](https://github.com/evmos/ethermint/pull/1320) Fix codehash check mismatch when the code has been deleted in the evm state.
 * (rpc) [#1392](https://github.com/evmos/ethermint/pull/1392) Allow fill the proposer address in json-rpc through tendermint api, and pass explicitly to grpc query handler.
 * (rpc) [#1405](https://github.com/evmos/ethermint/pull/1405) Fix uninitialized chain ID field in gRPC requests.
+* (evm) [#]() Fix non-deterministic evm execution when enable-eips is not empty.
 
 ## [v0.19.3] - 2022-10-14
 
