@@ -409,8 +409,11 @@ func (b *Backend) GasPrice() (*hexutil.Big, error) {
 			return nil, err
 		}
 		result = result.Add(result, head.BaseFee)
-	} else {
-		result = big.NewInt(b.RPCMinGasPrice())
+	}
+
+	nodeMinGasPrice := big.NewInt(b.RPCMinGasPrice())
+	if result == nil || nodeMinGasPrice.Cmp(result) > 0 {
+		result = nodeMinGasPrice
 	}
 
 	// return at least GlobalMinGasPrice from FeeMarket module

@@ -42,6 +42,11 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 * (rpc) [#1720](https://github.com/evmos/ethermint/pull/1720) Fix next block fee for historical block and calculate base fee by params.
 * (rpc) [#1722](https://github.com/evmos/ethermint/pull/1722) Align revert response for `eth_estimateGas` and `eth_call` as Ethereum.
+* (rpc) [#1685](https://github.com/evmos/ethermint/pull/1685) Fix parse for websocket connID.
+* (rpc) [#1773](https://github.com/evmos/ethermint/pull/1773) Avoid channel get changed when concurrent subscribe happens.
+- (rpc) [#1781](https://github.com/evmos/ethermint/pull/1781) Fix decode log for multi topics in websocket subscribe.
+* (mempool) [#310](https://github.com/crypto-org-chain/ethermint/pull/310) disable vesting messages in check tx mode.
+* (mempool) [#385](https://github.com/crypto-org-chain/ethermint/pull/385) Respect the per-node configured min-gas-price in the mempool logic, and change rpc endpoint accordingly.
 * (mempool) [#]() disable vesting messages in check tx mode.
 
 ### Features

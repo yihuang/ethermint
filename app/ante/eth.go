@@ -547,22 +547,18 @@ func NewEthMempoolFeeDecorator(ek EVMKeeper) EthMempoolFeeDecorator {
 func (mfd EthMempoolFeeDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate bool, next sdk.AnteHandler) (newCtx sdk.Context, err error) {
 	if ctx.IsCheckTx() && !simulate {
 		params := mfd.evmKeeper.GetParams(ctx)
-		ethCfg := params.ChainConfig.EthereumConfig(mfd.evmKeeper.ChainID())
-		baseFee := mfd.evmKeeper.GetBaseFee(ctx, ethCfg)
-		if baseFee == nil {
-			for _, msg := range tx.GetMsgs() {
-				ethMsg, ok := msg.(*evmtypes.MsgEthereumTx)
-				if !ok {
-					return ctx, sdkerrors.Wrapf(sdkerrors.ErrUnknownRequest, "invalid message type %T, expected %T", msg, (*evmtypes.MsgEthereumTx)(nil))
-				}
+		for _, msg := range tx.GetMsgs() {
+			ethMsg, ok := msg.(*evmtypes.MsgEthereumTx)
+			if !ok {
+				return ctx, sdkerrors.Wrapf(sdkerrors.ErrUnknownRequest, "invalid message type %T, expected %T", msg, (*evmtypes.MsgEthereumTx)(nil))
+			}
 
-				evmDenom := params.EvmDenom
-				feeAmt := ethMsg.GetFee()
-				glDec := sdk.NewDec(int64(ethMsg.GetGas()))
-				requiredFee := ctx.MinGasPrices().AmountOf(evmDenom).Mul(glDec)
-				if sdk.NewDecFromBigInt(feeAmt).LT(requiredFee) {
-					return ctx, sdkerrors.Wrapf(sdkerrors.ErrInsufficientFee, "insufficient fees; got: %s required: %s", feeAmt, requiredFee)
-				}
+			evmDenom := params.EvmDenom
+			feeAmt := ethMsg.GetFee()
+			glDec := sdk.NewDec(int64(ethMsg.GetGas()))
+			requiredFee := ctx.MinGasPrices().AmountOf(evmDenom).Mul(glDec)
+			if sdk.NewDecFromBigInt(feeAmt).LT(requiredFee) {
+				return ctx, sdkerrors.Wrapf(sdkerrors.ErrInsufficientFee, "insufficient fees; got: %s required: %s", feeAmt, requiredFee)
 			}
 		}
 	}

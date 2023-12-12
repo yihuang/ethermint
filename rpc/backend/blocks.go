@@ -431,6 +431,13 @@ func (b *Backend) RPCBlockFromTendermintBlock(
 		gasUsed += uint64(txsResult.GetGasUsed())
 	}
 
+	if baseFee != nil {
+		minGasPrice := big.NewInt(b.RPCMinGasPrice())
+		if minGasPrice.Cmp(baseFee) > 0 {
+			baseFee = minGasPrice
+		}
+	}
+
 	formattedBlock := rpctypes.FormatBlock(
 		block.Header, block.Size(),
 		gasLimit, new(big.Int).SetUint64(gasUsed),

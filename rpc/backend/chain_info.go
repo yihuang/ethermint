@@ -177,6 +177,7 @@ func (b *Backend) FeeHistory(
 
 	thisBaseFee := make([]*hexutil.Big, blocks+1)
 	thisGasUsedRatio := make([]float64, blocks)
+	minGasPrice := big.NewInt(b.RPCMinGasPrice())
 
 	// rewards should only be calculated if reward percentiles were included
 	calculateRewards := rewardCount != 0
@@ -221,6 +222,14 @@ func (b *Backend) FeeHistory(
 				if err != nil {
 					chanErr <- err
 					return
+				}
+
+				// adjust the base fee to take account of the per-node min-gas-price
+				if oneFeeHistory.BaseFee != nil && minGasPrice.Cmp(oneFeeHistory.BaseFee) > 0 {
+					oneFeeHistory.BaseFee = minGasPrice
+				}
+				if oneFeeHistory.NextBaseFee != nil && minGasPrice.Cmp(oneFeeHistory.NextBaseFee) > 0 {
+					oneFeeHistory.NextBaseFee = minGasPrice
 				}
 
 				// copy
