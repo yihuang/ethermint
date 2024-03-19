@@ -68,29 +68,75 @@ func (options HandlerOptions) validate() error {
 	return nil
 }
 
-func newEthAnteHandler(ctx sdk.Context, options HandlerOptions, extra ...sdk.AnteDecorator) sdk.AnteHandler {
-	evmParams := options.EvmKeeper.GetParams(ctx)
-	feemarketParams := options.FeeMarketKeeper.GetParams(ctx)
-	evmDenom := evmParams.EvmDenom
-	chainID := options.EvmKeeper.ChainID()
-	chainCfg := evmParams.GetChainConfig()
-	ethCfg := chainCfg.EthereumConfig(chainID)
-	baseFee := evmtypes.GetBaseFee(ctx.BlockHeight(), ethCfg, &feemarketParams)
-	decorators := []sdk.AnteDecorator{
-		NewEthSetUpContextDecorator(options.EvmKeeper),                                 // outermost AnteDecorator. SetUpContext must be called first
-		NewEthMempoolFeeDecorator(evmDenom, baseFee),                                   // Check eth effective gas price against minimal-gas-prices
-		NewEthMinGasPriceDecorator(options.FeeMarketKeeper, baseFee, &feemarketParams), // Check eth effective gas price against the global MinGasPrice
-		NewEthValidateBasicDecorator(&evmParams, baseFee),
-		NewEthSigVerificationDecorator(chainID),
-		NewEthAccountVerificationDecorator(options.AccountKeeper, options.EvmKeeper, evmDenom),
-		NewCanTransferDecorator(options.EvmKeeper, baseFee, &evmParams, ethCfg),
-		NewEthGasConsumeDecorator(options.EvmKeeper, options.MaxTxGasWanted, ethCfg, evmDenom, baseFee),
-		NewEthIncrementSenderSequenceDecorator(options.AccountKeeper), // innermost AnteDecorator.
-		NewGasWantedDecorator(options.FeeMarketKeeper, ethCfg, &feemarketParams),
-		NewEthEmitEventDecorator(options.EvmKeeper), // emit eth tx hash and index at the very last ante handler.
+func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
+	return func(ctx sdk.Context, tx sdk.Tx, simulate bool) (sdk.Context, error) {
+		var err error
+		evmParams := options.EvmKeeper.GetParams(ctx)
+		evmDenom := evmParams.EvmDenom
+		feemarketParams := options.FeeMarketKeeper.GetParams(ctx)
+		chainID := options.EvmKeeper.ChainID()
+		chainCfg := evmParams.GetChainConfig()
+		ethCfg := chainCfg.EthereumConfig(chainID)
+		baseFee := evmtypes.GetBaseFee(ctx.BlockHeight(), ethCfg, &feemarketParams)
+
+		// all transactions must implement FeeTx
+		feeTx, ok := tx.(sdk.FeeTx)
+		if !ok {
+			return ctx, errorsmod.Wrapf(errortypes.ErrInvalidType, "invalid transaction type %T, expected sdk.FeeTx", tx)
+		}
+
+		// We need to setup an empty gas config so that the gas is consistent with Ethereum.
+		ctx, err = SetupEthContext(ctx, tx, options.EvmKeeper)
+		if err != nil {
+			return ctx, err
+		}
+
+		if err := checkMempoolFee(ctx, tx, simulate, baseFee, evmDenom); err != nil {
+			return ctx, err
+		}
+
+		if err := CheckEthMinGasPrice(tx, feemarketParams.MinGasPrice, baseFee); err != nil {
+			return ctx, err
+		}
+
+		if err := ValidateEthBasic(ctx, tx, &evmParams, baseFee); err != nil {
+			return ctx, err
+		}
+
+		if err := VerifyEthSig(tx, chainID); err != nil {
+			return ctx, err
+		}
+
+		if err := VerifyEthAccount(ctx, tx, options.EvmKeeper, options.AccountKeeper, evmDenom); err != nil {
+			return ctx, err
+		}
+
+		if err := CheckEthCanTransfer(ctx, tx, baseFee, ethCfg, options.EvmKeeper, &evmParams); err != nil {
+			return ctx, err
+		}
+
+		ctx, err = CheckEthGasConsume(
+			ctx, tx, ethCfg, options.EvmKeeper,
+			baseFee, options.MaxTxGasWanted, evmDenom,
+		)
+		if err != nil {
+			return ctx, err
+		}
+
+		if err := CheckEthSenderNonce(ctx, tx, options.AccountKeeper); err != nil {
+			return ctx, err
+		}
+
+		if err := checkGasWanted(ctx, feeTx, ethCfg, options.FeeMarketKeeper, &feemarketParams); err != nil {
+			return ctx, err
+		}
+
+		if len(options.ExtraDecorators) > 0 {
+			return sdk.ChainAnteDecorators(options.ExtraDecorators...)(ctx, tx, simulate)
+		}
+
+		return ctx, nil
 	}
-	decorators = append(decorators, extra...)
-	return sdk.ChainAnteDecorators(decorators...)
 }
 
 func newCosmosAnteHandler(ctx sdk.Context, options HandlerOptions, extra ...sdk.AnteDecorator) sdk.AnteHandler {

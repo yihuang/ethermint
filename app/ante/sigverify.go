@@ -24,32 +24,22 @@ import (
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
 
-// EthSigVerificationDecorator validates an ethereum signatures
-type EthSigVerificationDecorator struct {
-	chainID *big.Int
-}
-
-// NewEthSigVerificationDecorator creates a new EthSigVerificationDecorator
-func NewEthSigVerificationDecorator(chainID *big.Int) EthSigVerificationDecorator {
-	return EthSigVerificationDecorator{chainID}
-}
-
-// AnteHandle validates checks that the registered chain id is the same as the one on the message, and
+// VerifyEthSig validates checks that the registered chain id is the same as the one on the message, and
 // that the signer address matches the one defined on the message.
 // It's not skipped for RecheckTx, because it set `From` address which is critical from other ante handler to work.
 // Failure in RecheckTx will prevent tx to be included into block, especially when CheckTx succeed, in which case user
 // won't see the error message.
-func (esvd EthSigVerificationDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate bool, next sdk.AnteHandler) (newCtx sdk.Context, err error) {
+func VerifyEthSig(tx sdk.Tx, chainID *big.Int) error {
 	for _, msg := range tx.GetMsgs() {
 		msgEthTx, ok := msg.(*evmtypes.MsgEthereumTx)
 		if !ok {
-			return ctx, errorsmod.Wrapf(errortypes.ErrUnknownRequest, "invalid message type %T, expected %T", msg, (*evmtypes.MsgEthereumTx)(nil))
+			return errorsmod.Wrapf(errortypes.ErrUnknownRequest, "invalid message type %T, expected %T", msg, (*evmtypes.MsgEthereumTx)(nil))
 		}
 
-		if err := msgEthTx.VerifySender(esvd.chainID); err != nil {
-			return ctx, errorsmod.Wrapf(errortypes.ErrorInvalidSigner, "signature verification failed: %s", err.Error())
+		if err := msgEthTx.VerifySender(chainID); err != nil {
+			return errorsmod.Wrapf(errortypes.ErrorInvalidSigner, "signature verification failed: %s", err.Error())
 		}
 	}
 
-	return next(ctx, tx, simulate)
+	return nil
 }
