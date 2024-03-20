@@ -151,7 +151,7 @@ func CheckEthMinGasPrice(tx sdk.Tx, minGasPrice sdkmath.LegacyDec, baseFee *big.
 	return nil
 }
 
-// EthMempoolFeeDecorator will check if the transaction's effective fee is at least as large
+// CheckEthMempoolFee will check if the transaction's effective fee is at least as large
 // as the local validator's minimum gasFee (defined in validator config).
 // If fee is too low, decorator returns error and tx is rejected from mempool.
 // Note this only applies when ctx.CheckTx = true
@@ -161,7 +161,7 @@ func CheckEthMinGasPrice(tx sdk.Tx, minGasPrice sdkmath.LegacyDec, baseFee *big.
 // AnteHandle ensures that the provided fees meet a minimum threshold for the validator.
 // This check only for local mempool purposes, and thus it is only run on (Re)CheckTx.
 // The logic is also skipped if the London hard fork and EIP-1559 are enabled.
-func checkMempoolFee(
+func CheckEthMempoolFee(
 	ctx sdk.Context, tx sdk.Tx, simulate bool,
 	baseFee *big.Int, evmDenom string,
 ) error {

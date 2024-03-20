@@ -86,12 +86,12 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 		}
 
 		// We need to setup an empty gas config so that the gas is consistent with Ethereum.
-		ctx, err = SetupEthContext(ctx, tx, options.EvmKeeper)
+		ctx, err = SetupEthContext(ctx, options.EvmKeeper)
 		if err != nil {
 			return ctx, err
 		}
 
-		if err := checkMempoolFee(ctx, tx, simulate, baseFee, evmDenom); err != nil {
+		if err := CheckEthMempoolFee(ctx, tx, simulate, baseFee, evmDenom); err != nil {
 			return ctx, err
 		}
 
@@ -127,7 +127,7 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 			return ctx, err
 		}
 
-		if err := checkGasWanted(ctx, feeTx, ethCfg, options.FeeMarketKeeper, &feemarketParams); err != nil {
+		if err := CheckGasWanted(ctx, feeTx, ethCfg, options.FeeMarketKeeper, &feemarketParams); err != nil {
 			return ctx, err
 		}
 

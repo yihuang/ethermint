@@ -28,7 +28,7 @@ func (suite *AnteTestSuite) TestEthSetupContextDecorator() {
 
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
-			ctx, err := ante.SetupEthContext(suite.ctx, tc.tx, suite.app.EvmKeeper)
+			ctx, err := ante.SetupEthContext(suite.ctx, suite.app.EvmKeeper)
 
 			if tc.expPass {
 				suite.Require().NoError(err)

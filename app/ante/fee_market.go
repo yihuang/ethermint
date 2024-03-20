@@ -55,14 +55,14 @@ func (gwd GasWantedDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate bo
 		return next(ctx, tx, simulate)
 	}
 
-	if err := checkGasWanted(ctx, feeTx, gwd.ethCfg, gwd.feeMarketKeeper, gwd.feemarketParams); err != nil {
+	if err := CheckGasWanted(ctx, feeTx, gwd.ethCfg, gwd.feeMarketKeeper, gwd.feemarketParams); err != nil {
 		return ctx, err
 	}
 
 	return next(ctx, tx, simulate)
 }
 
-func checkGasWanted(
+func CheckGasWanted(
 	ctx sdk.Context, feeTx sdk.FeeTx,
 	ethCfg *params.ChainConfig,
 	feeMarketKeeper FeeMarketKeeper,

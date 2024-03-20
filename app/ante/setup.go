@@ -30,7 +30,7 @@ import (
 
 // SetupEthContext is adapted from SetUpContextDecorator from cosmos-sdk, it ignores gas consumption
 // by setting the gas meter to infinite
-func SetupEthContext(ctx sdk.Context, tx sdk.Tx, evmKeeper EVMKeeper) (newCtx sdk.Context, err error) {
+func SetupEthContext(ctx sdk.Context, evmKeeper EVMKeeper) (newCtx sdk.Context, err error) {
 	// We need to setup an empty gas config so that the gas is consistent with Ethereum.
 	newCtx = ctx.WithGasMeter(sdk.NewInfiniteGasMeter()).
 		WithKVGasConfig(storetypes.GasConfig{}).
