@@ -17,10 +17,6 @@ import (
 )
 
 func (suite *AnteTestSuite) TestNewEthAccountVerificationDecorator() {
-	dec := ante.NewEthAccountVerificationDecorator(
-		suite.app.AccountKeeper, suite.app.EvmKeeper, evmtypes.DefaultEVMDenom,
-	)
-
 	addr := tests.GenerateAddress()
 
 	tx := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 1, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil)
@@ -93,7 +89,7 @@ func (suite *AnteTestSuite) TestNewEthAccountVerificationDecorator() {
 			tc.malleate()
 			suite.Require().NoError(vmdb.Commit())
 
-			_, err := dec.AnteHandle(suite.ctx.WithIsCheckTx(tc.checkTx), tc.tx, false, NextFn)
+			err := ante.VerifyEthAccount(suite.ctx.WithIsCheckTx(tc.checkTx), tc.tx, suite.app.EvmKeeper, suite.app.AccountKeeper, evmtypes.DefaultEVMDenom)
 
 			if tc.expPass {
 				suite.Require().NoError(err)
@@ -106,7 +102,6 @@ func (suite *AnteTestSuite) TestNewEthAccountVerificationDecorator() {
 
 func (suite *AnteTestSuite) TestEthNonceVerificationDecorator() {
 	suite.SetupTest()
-	dec := ante.NewEthIncrementSenderSequenceDecorator(suite.app.AccountKeeper)
 
 	addr := tests.GenerateAddress()
 
@@ -149,7 +144,7 @@ func (suite *AnteTestSuite) TestEthNonceVerificationDecorator() {
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
 			tc.malleate()
-			_, err := dec.AnteHandle(suite.ctx.WithIsReCheckTx(tc.reCheckTx), tc.tx, false, NextFn)
+			err := ante.CheckEthSenderNonce(suite.ctx.WithIsReCheckTx(tc.reCheckTx), tc.tx, suite.app.AccountKeeper)
 
 			if tc.expPass {
 				suite.Require().NoError(err)
@@ -166,7 +161,6 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 	chainCfg := evmParams.GetChainConfig()
 	ethCfg := chainCfg.EthereumConfig(chainID)
 	baseFee := suite.app.EvmKeeper.GetBaseFee(suite.ctx, ethCfg)
-	dec := ante.NewEthGasConsumeDecorator(suite.app.EvmKeeper, config.DefaultMaxTxGasWanted, ethCfg, evmtypes.DefaultEVMDenom, baseFee)
 
 	addr := tests.GenerateAddress()
 
@@ -302,12 +296,18 @@ func (suite *AnteTestSuite) TestEthGasConsumeDecorator() {
 
 			if tc.expPanic {
 				suite.Require().Panics(func() {
-					_, _ = dec.AnteHandle(suite.ctx.WithIsCheckTx(true).WithGasMeter(sdk.NewGasMeter(1)), tc.tx, false, NextFn)
+					_, _ = ante.CheckEthGasConsume(
+						suite.ctx.WithIsCheckTx(true).WithGasMeter(sdk.NewGasMeter(1)), tc.tx,
+						ethCfg, suite.app.EvmKeeper, baseFee, config.DefaultMaxTxGasWanted, evmtypes.DefaultEVMDenom,
+					)
 				})
 				return
 			}
 
-			ctx, err := dec.AnteHandle(suite.ctx.WithIsCheckTx(true).WithGasMeter(sdk.NewInfiniteGasMeter()), tc.tx, false, NextFn)
+			ctx, err := ante.CheckEthGasConsume(
+				suite.ctx.WithIsCheckTx(true).WithGasMeter(sdk.NewInfiniteGasMeter()), tc.tx,
+				ethCfg, suite.app.EvmKeeper, baseFee, config.DefaultMaxTxGasWanted, evmtypes.DefaultEVMDenom,
+			)
 			if tc.expPass {
 				suite.Require().NoError(err)
 				suite.Require().Equal(tc.expPriority, ctx.Priority())
@@ -328,7 +328,6 @@ func (suite *AnteTestSuite) TestCanTransferDecorator() {
 	chainCfg := evmParams.GetChainConfig()
 	ethCfg := chainCfg.EthereumConfig(chainID)
 	baseFee := suite.app.EvmKeeper.GetBaseFee(suite.ctx, ethCfg)
-	dec := ante.NewCanTransferDecorator(suite.app.EvmKeeper, baseFee, &evmParams, ethCfg)
 
 	tx := evmtypes.NewTxContract(
 		suite.app.EvmKeeper.ChainID(),
@@ -396,7 +395,10 @@ func (suite *AnteTestSuite) TestCanTransferDecorator() {
 			tc.malleate()
 			suite.Require().NoError(vmdb.Commit())
 
-			_, err := dec.AnteHandle(suite.ctx.WithIsCheckTx(true), tc.tx, false, NextFn)
+			err := ante.CheckEthCanTransfer(
+				suite.ctx.WithIsCheckTx(true), tc.tx,
+				baseFee, ethCfg, suite.app.EvmKeeper, &evmParams,
+			)
 
 			if tc.expPass {
 				suite.Require().NoError(err)
@@ -408,7 +410,6 @@ func (suite *AnteTestSuite) TestCanTransferDecorator() {
 }
 
 func (suite *AnteTestSuite) TestEthIncrementSenderSequenceDecorator() {
-	dec := ante.NewEthIncrementSenderSequenceDecorator(suite.app.AccountKeeper)
 	addr, privKey := tests.NewAddrKey()
 
 	contract := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 0, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil)
@@ -475,12 +476,12 @@ func (suite *AnteTestSuite) TestEthIncrementSenderSequenceDecorator() {
 
 			if tc.expPanic {
 				suite.Require().Panics(func() {
-					_, _ = dec.AnteHandle(suite.ctx, tc.tx, false, NextFn)
+					_ = ante.CheckEthSenderNonce(suite.ctx, tc.tx, suite.app.AccountKeeper)
 				})
 				return
 			}
 
-			_, err := dec.AnteHandle(suite.ctx, tc.tx, false, NextFn)
+			err := ante.CheckEthSenderNonce(suite.ctx, tc.tx, suite.app.AccountKeeper)
 
 			if tc.expPass {
 				suite.Require().NoError(err)

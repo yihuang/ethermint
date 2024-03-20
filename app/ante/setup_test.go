@@ -12,7 +12,6 @@ import (
 )
 
 func (suite *AnteTestSuite) TestEthSetupContextDecorator() {
-	dec := ante.NewEthSetUpContextDecorator(suite.app.EvmKeeper)
 	tx := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 1, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil)
 
 	testCases := []struct {
@@ -20,7 +19,6 @@ func (suite *AnteTestSuite) TestEthSetupContextDecorator() {
 		tx      sdk.Tx
 		expPass bool
 	}{
-		{"invalid transaction type - does not implement GasTx", &invalidTx{}, false},
 		{
 			"success - transaction implement GasTx",
 			tx,
@@ -30,7 +28,7 @@ func (suite *AnteTestSuite) TestEthSetupContextDecorator() {
 
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
-			ctx, err := dec.AnteHandle(suite.ctx, tc.tx, false, NextFn)
+			ctx, err := ante.SetupEthContext(suite.ctx, suite.app.EvmKeeper)
 
 			if tc.expPass {
 				suite.Require().NoError(err)
@@ -90,8 +88,7 @@ func (suite *AnteTestSuite) TestValidateBasicDecorator() {
 			ethCfg := chainCfg.EthereumConfig(chainID)
 			baseFee := suite.app.EvmKeeper.GetBaseFee(suite.ctx, ethCfg)
 
-			dec := ante.NewEthValidateBasicDecorator(&evmParams, baseFee)
-			_, err := dec.AnteHandle(suite.ctx.WithIsReCheckTx(tc.reCheckTx), tc.tx, false, NextFn)
+			err := ante.ValidateEthBasic(suite.ctx.WithIsReCheckTx(tc.reCheckTx), tc.tx, &evmParams, baseFee)
 
 			if tc.expPass {
 				suite.Require().NoError(err)

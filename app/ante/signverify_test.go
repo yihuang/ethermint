@@ -43,8 +43,7 @@ func (suite *AnteTestSuite) TestEthSigVerificationDecorator() {
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
 			suite.SetupTest()
-			dec := ante.NewEthSigVerificationDecorator(suite.app.EvmKeeper.ChainID())
-			_, err := dec.AnteHandle(suite.ctx.WithIsReCheckTx(tc.reCheckTx), tc.tx, false, NextFn)
+			err := ante.VerifyEthSig(tc.tx, suite.app.EvmKeeper.ChainID())
 
 			if tc.expPass {
 				suite.Require().NoError(err)

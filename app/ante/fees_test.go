@@ -342,8 +342,7 @@ func (s *AnteTestSuite) TestEthMinGasPriceDecorator() {
 				baseFee := s.app.EvmKeeper.GetBaseFee(s.ctx, ethCfg)
 				feemarketParams := s.app.FeeMarketKeeper.GetParams(s.ctx)
 
-				dec := ante.NewEthMinGasPriceDecorator(s.app.FeeMarketKeeper, baseFee, &feemarketParams)
-				_, err := dec.AnteHandle(s.ctx, tx, et.simulate, NextFn)
+				err := ante.CheckEthMinGasPrice(tx, feemarketParams.MinGasPrice, baseFee)
 
 				if tc.expPass {
 					s.Require().NoError(err, tc.name)
