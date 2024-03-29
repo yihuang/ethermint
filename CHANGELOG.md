@@ -44,6 +44,10 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (rpc) [#434](https://github.com/crypto-org-chain/ethermint/pull/434) No need gasPrice when patch gasUsed for `eth_getTransactionReceipt`.
 * (rpc) [#439](https://github.com/crypto-org-chain/ethermint/pull/439), [#441](https://github.com/crypto-org-chain/ethermint/pull/441) Align trace response for failed tx with go-ethereum.
 
+### State Machine Breaking
+
+* (rpc) [#443](https://github.com/crypto-org-chain/ethermint/pull/443) Keep behavior of random opcode as before.
+
 ### Features
 
 ## v0.21.x-cronos
