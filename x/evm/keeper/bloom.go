@@ -8,19 +8,19 @@ import (
 	"github.com/evmos/ethermint/x/evm/types"
 )
 
-func (k Keeper) SetTxBloom(ctx sdk.Context, bloom []byte) {
-	store := ctx.KVStore(k.transientKey)
-	store.Set(types.TransientBloomKey(ctx.TxIndex(), ctx.MsgIndex()), bloom)
+func (k Keeper) SetTxBloom(ctx sdk.Context, bloom *big.Int) {
+	store := ctx.ObjectStore(k.objectKey)
+	store.Set(types.ObjectBloomKey(ctx.TxIndex(), ctx.MsgIndex()), bloom)
 }
 
 func (k Keeper) CollectTxBloom(ctx sdk.Context) {
-	store := prefix.NewStore(ctx.KVStore(k.transientKey), types.KeyPrefixTransientBloom)
+	store := prefix.NewObjStore(ctx.ObjectStore(k.objectKey), types.KeyPrefixObjectBloom)
 	it := store.Iterator(nil, nil)
 	defer it.Close()
 
 	bloom := new(big.Int)
 	for ; it.Valid(); it.Next() {
-		bloom.Or(bloom, big.NewInt(0).SetBytes(it.Value()))
+		bloom.Or(bloom, it.Value().(*big.Int))
 	}
 
 	k.EmitBlockBloomEvent(ctx, bloom.Bytes())
