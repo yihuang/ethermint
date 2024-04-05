@@ -18,7 +18,6 @@ package keeper
 import (
 	"math/big"
 
-	corestoretypes "cosmossdk.io/core/store"
 	errorsmod "cosmossdk.io/errors"
 	"cosmossdk.io/log"
 	storetypes "cosmossdk.io/store/types"
@@ -41,15 +40,14 @@ type CustomContractFn func(sdk.Context, params.Rules) vm.PrecompiledContract
 // Keeper grants access to the EVM module state and implements the go-ethereum StateDB interface.
 type Keeper struct {
 	// Protobuf codec
-	cdc          codec.Codec
-	storeService corestoretypes.KVStoreService
+	cdc codec.Codec
 	// Store key required for the EVM Prefix KVStore. It is required by:
 	// - storing account's Storage State
 	// - storing account's Code
 	// - storing module parameters
 	storeKey storetypes.StoreKey
 
-	// key to access the transient store, which is reset on every block during Commit
+	// key to access the object store, which is reset on every block during Commit
 	objectKey storetypes.StoreKey
 
 	// the address capable of executing a MsgUpdateParams message. Typically, this should be the x/gov module account.
@@ -78,7 +76,6 @@ type Keeper struct {
 // NewKeeper generates new evm module keeper
 func NewKeeper(
 	cdc codec.Codec,
-	storeService corestoretypes.KVStoreService,
 	storeKey, objectKey storetypes.StoreKey,
 	authority sdk.AccAddress,
 	ak types.AccountKeeper,
@@ -101,7 +98,6 @@ func NewKeeper(
 	// NOTE: we pass in the parameter space to the CommitStateDB in order to use custom denominations for the EVM operations
 	return &Keeper{
 		cdc:               cdc,
-		storeService:      storeService,
 		authority:         authority,
 		accountKeeper:     ak,
 		bankKeeper:        bankKeeper,
