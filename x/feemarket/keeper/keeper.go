@@ -18,7 +18,6 @@ package keeper
 import (
 	"math/big"
 
-	corestoretypes "cosmossdk.io/core/store"
 	"cosmossdk.io/log"
 	storetypes "cosmossdk.io/store/types"
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -33,10 +32,9 @@ var KeyPrefixBaseFeeV1 = []byte{2}
 // Keeper grants access to the Fee Market module state.
 type Keeper struct {
 	// Protobuf codec
-	cdc          codec.BinaryCodec
-	storeService corestoretypes.KVStoreService
+	cdc codec.BinaryCodec
 	// Store key required for the Fee Market Prefix KVStore.
-	storeKey storetypes.StoreKey
+	storeKey, objectKey storetypes.StoreKey
 	// the address capable of executing a MsgUpdateParams message. Typically, this should be the x/gov module account.
 	authority sdk.AccAddress
 }
@@ -44,9 +42,8 @@ type Keeper struct {
 // NewKeeper generates new fee market module keeper
 func NewKeeper(
 	cdc codec.BinaryCodec,
-	storeService corestoretypes.KVStoreService,
 	authority sdk.AccAddress,
-	storeKey storetypes.StoreKey,
+	storeKey, objectKey storetypes.StoreKey,
 ) Keeper {
 	// ensure authority account is correctly formatted
 	if err := sdk.VerifyAddressFormat(authority); err != nil {
@@ -54,10 +51,10 @@ func NewKeeper(
 	}
 
 	return Keeper{
-		cdc:          cdc,
-		storeService: storeService,
-		storeKey:     storeKey,
-		authority:    authority,
+		cdc:       cdc,
+		storeKey:  storeKey,
+		objectKey: objectKey,
+		authority: authority,
 	}
 }
 

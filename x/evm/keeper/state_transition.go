@@ -200,7 +200,7 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 
 	// Compute block bloom filter
 	if len(logs) > 0 {
-		k.SetTxBloom(tmpCtx, ethtypes.LogsBloom(logs))
+		k.SetTxBloom(tmpCtx, new(big.Int).SetBytes(ethtypes.LogsBloom(logs)))
 	}
 
 	var contractAddr common.Address

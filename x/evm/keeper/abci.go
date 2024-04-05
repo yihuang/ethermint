@@ -24,6 +24,10 @@ import (
 // BeginBlock sets the sdk Context and EIP155 chain id to the Keeper.
 func (k *Keeper) BeginBlock(ctx sdk.Context) error {
 	k.WithChainID(ctx)
+
+	// cache params object
+	_ = k.GetParams(ctx)
+
 	return nil
 }
 

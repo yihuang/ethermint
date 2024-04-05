@@ -50,7 +50,7 @@ type Keeper struct {
 	storeKey storetypes.StoreKey
 
 	// key to access the transient store, which is reset on every block during Commit
-	transientKey storetypes.StoreKey
+	objectKey storetypes.StoreKey
 
 	// the address capable of executing a MsgUpdateParams message. Typically, this should be the x/gov module account.
 	authority sdk.AccAddress
@@ -79,7 +79,7 @@ type Keeper struct {
 func NewKeeper(
 	cdc codec.Codec,
 	storeService corestoretypes.KVStoreService,
-	storeKey, transientKey storetypes.StoreKey,
+	storeKey, objectKey storetypes.StoreKey,
 	authority sdk.AccAddress,
 	ak types.AccountKeeper,
 	bankKeeper types.BankKeeper,
@@ -108,7 +108,7 @@ func NewKeeper(
 		stakingKeeper:     sk,
 		feeMarketKeeper:   fmk,
 		storeKey:          storeKey,
-		transientKey:      transientKey,
+		objectKey:         objectKey,
 		tracer:            tracer,
 		customContractFns: customContractFns,
 	}
@@ -287,19 +287,18 @@ func (k Keeper) getBaseFee(ctx sdk.Context, london bool) *big.Int {
 
 // GetTransientGasUsed returns the gas used by current cosmos tx.
 func (k Keeper) GetTransientGasUsed(ctx sdk.Context) uint64 {
-	store := ctx.TransientStore(k.transientKey)
-	bz := store.Get(types.TransientGasUsedKey(ctx.TxIndex()))
-	if len(bz) == 0 {
+	store := ctx.ObjectStore(k.objectKey)
+	v := store.Get(types.ObjectGasUsedKey(ctx.TxIndex()))
+	if v == nil {
 		return 0
 	}
-	return sdk.BigEndianToUint64(bz)
+	return v.(uint64)
 }
 
 // SetTransientGasUsed sets the gas used by current cosmos tx.
 func (k Keeper) SetTransientGasUsed(ctx sdk.Context, gasUsed uint64) {
-	store := ctx.TransientStore(k.transientKey)
-	bz := sdk.Uint64ToBigEndian(gasUsed)
-	store.Set(types.TransientGasUsedKey(ctx.TxIndex()), bz)
+	store := ctx.ObjectStore(k.objectKey)
+	store.Set(types.ObjectGasUsedKey(ctx.TxIndex()), gasUsed)
 }
 
 // AddTransientGasUsed accumulate gas used by each eth msgs included in current cosmos tx.
