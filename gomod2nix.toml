@@ -41,8 +41,8 @@ schema = 3
     version = "v1.3.0"
     hash = "sha256-EEFK43Cr0g0ndhQhkIKher0FqV3mvkmE9z0sP7uVSHg="
   [mod."cosmossdk.io/store"]
-    version = "v0.0.0-20240403085742-29d3142f7596"
-    hash = "sha256-wV4pdty1onr51ZtRWS1MSR4sH3rptsLL+Zc3dPuvlIA="
+    version = "v0.0.0-20240408014408-56c165536d0a"
+    hash = "sha256-5fFhveNdA4rEwtTVNE4MIzK7udgNF80q9fkiDcw7T/Q="
     replaced = "github.com/crypto-org-chain/cosmos-sdk/store"
   [mod."cosmossdk.io/tools/confix"]
     version = "v0.1.1"
@@ -161,8 +161,8 @@ schema = 3
     version = "v1.0.0-beta.4"
     hash = "sha256-5Kn82nsZfiEtuwhhLZqmMxdAY1tX/Fi3HJ0/MEaRohw="
   [mod."github.com/cosmos/cosmos-sdk"]
-    version = "v0.46.0-beta2.0.20240403085742-29d3142f7596"
-    hash = "sha256-qIvDAFwGrFIOxPGUazpfR3mu9X3eJqkbBJWQUwhP2hY="
+    version = "v0.46.0-beta2.0.20240408014408-56c165536d0a"
+    hash = "sha256-xjZvl0pxsEkSW2X8Q37mPHXAHnMeHiwCtX2FmDZVUHQ="
     replaced = "github.com/crypto-org-chain/cosmos-sdk"
   [mod."github.com/cosmos/go-bip39"]
     version = "v1.0.0"
@@ -200,6 +200,9 @@ schema = 3
   [mod."github.com/creachadair/tomledit"]
     version = "v0.0.24"
     hash = "sha256-4vUukHONOjNn0qfQr4esK6TWfPWsIp+rbdz65og84lw="
+  [mod."github.com/crypto-org-chain/go-block-stm"]
+    version = "v0.0.0-20240408011717-9f11af197bde"
+    hash = "sha256-+UTSUoh4DxkWPQEc/j0atak1Oxq3tdP8r6ZMmB0k5KE="
   [mod."github.com/danieljoos/wincred"]
     version = "v1.2.0"
     hash = "sha256-LHcvTJCc8++bFndbd8ZgMSTe4L5h2C4rN+cSWHCz54Y="
@@ -566,8 +569,9 @@ schema = 3
     version = "v0.16.0"
     hash = "sha256-JW4zO/0vMzf1dXLePOqaMtiLUZgNbuIseh9GV+jQlf0="
   [mod."github.com/tidwall/btree"]
-    version = "v1.7.0"
-    hash = "sha256-bnr6c7a0nqo2HyGqxHk0kEZCEsjLYkPbAVY9WzaZ30o="
+    version = "v0.0.0-20240406140148-2687063b042c"
+    hash = "sha256-8eDLGHhw4qXG6MEa7w5Q9KLwOobXr8Vn5qqyQhuipQw="
+    replaced = "github.com/crypto-org-chain/btree"
   [mod."github.com/tidwall/gjson"]
     version = "v1.14.4"
     hash = "sha256-3DS2YNL95wG0qSajgRtIABD32J+oblaKVk8LIw+KSOc="

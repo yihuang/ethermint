@@ -28,6 +28,7 @@ require (
 	github.com/cosmos/ibc-go/modules/capability v1.0.0
 	github.com/cosmos/ibc-go/v8 v8.1.0
 	github.com/cosmos/rosetta v0.50.3-1
+	github.com/crypto-org-chain/go-block-stm v0.0.0-20240408011717-9f11af197bde
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 	github.com/ethereum/go-ethereum v1.10.26
 	github.com/gogo/protobuf v1.3.2
@@ -242,15 +243,16 @@ require (
 
 replace (
 	// release/v0.50.x
-	cosmossdk.io/store => github.com/crypto-org-chain/cosmos-sdk/store v0.0.0-20240403085742-29d3142f7596
+	cosmossdk.io/store => github.com/crypto-org-chain/cosmos-sdk/store v0.0.0-20240408014408-56c165536d0a
 	// use cosmos keyring
 	github.com/99designs/keyring => github.com/cosmos/keyring v1.2.0
 	github.com/cockroachdb/pebble => github.com/cockroachdb/pebble v0.0.0-20230209160836-829675f94811
 	// release/v0.50.x
-	github.com/cosmos/cosmos-sdk => github.com/crypto-org-chain/cosmos-sdk v0.46.0-beta2.0.20240403085742-29d3142f7596
+	github.com/cosmos/cosmos-sdk => github.com/crypto-org-chain/cosmos-sdk v0.46.0-beta2.0.20240408014408-56c165536d0a
 	github.com/ethereum/go-ethereum => github.com/crypto-org-chain/go-ethereum v1.10.20-0.20231207063621-43cf32d91c3e
 	// Fix upstream GHSA-h395-qcrw-5vmq vulnerability.
 	// TODO Remove it: https://github.com/cosmos/cosmos-sdk/issues/10409
 	github.com/gin-gonic/gin => github.com/gin-gonic/gin v1.7.0
 	github.com/syndtr/goleveldb => github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
+	github.com/tidwall/btree => github.com/crypto-org-chain/btree v0.0.0-20240406140148-2687063b042c
 )

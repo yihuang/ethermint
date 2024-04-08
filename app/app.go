@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 
 	autocliv1 "cosmossdk.io/api/cosmos/autocli/v1"
 	reflectionv1 "cosmossdk.io/api/cosmos/reflection/v1"
@@ -131,6 +132,7 @@ import (
 	"github.com/evmos/ethermint/app/ante"
 	"github.com/evmos/ethermint/encoding"
 	"github.com/evmos/ethermint/ethereum/eip712"
+	srvconfig "github.com/evmos/ethermint/server/config"
 	srvflags "github.com/evmos/ethermint/server/flags"
 	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm"
@@ -314,7 +316,6 @@ func NewEthermintApp(
 	bApp.SetVersion(version.Version)
 	bApp.SetInterfaceRegistry(interfaceRegistry)
 	bApp.SetTxEncoder(txConfig.TxEncoder())
-	bApp.SetTxExecutor(DefaultTxExecutor)
 	bApp.SetDisableBlockGasMeter(true)
 
 	keys := storetypes.NewKVStoreKeys(
@@ -352,6 +353,18 @@ func NewEthermintApp(
 		tkeys:             tkeys,
 		memKeys:           memKeys,
 		okeys:             okeys,
+	}
+
+	executor := cast.ToString(appOpts.Get(srvflags.EVMBlockExecutor))
+	switch executor {
+	case srvconfig.BlockExecutorBlockSTM:
+		sdk.SetAddrCacheEnabled(false)
+		workers := cast.ToInt(appOpts.Get(srvflags.EVMBlockSTMWorkers))
+		app.SetTxExecutor(STMTxExecutor(app.GetStoreKeys(), workers))
+	case "", srvconfig.BlockExecutorSequential:
+		app.SetTxExecutor(DefaultTxExecutor)
+	default:
+		panic(fmt.Errorf("unknown EVM block executor: %s", executor))
 	}
 
 	// init params keeper and subspaces
@@ -979,6 +992,25 @@ func (app *EthermintApp) GetTKey(storeKey string) *storetypes.TransientStoreKey 
 // NOTE: This is solely used for testing purposes.
 func (app *EthermintApp) GetMemKey(storeKey string) *storetypes.MemoryStoreKey {
 	return app.memKeys[storeKey]
+}
+
+// GetStoreKeys returns all the stored store keys.
+func (app *EthermintApp) GetStoreKeys() []storetypes.StoreKey {
+	keys := make([]storetypes.StoreKey, 0, len(app.keys))
+	for _, key := range app.keys {
+		keys = append(keys, key)
+	}
+	for _, key := range app.tkeys {
+		keys = append(keys, key)
+	}
+	for _, key := range app.memKeys {
+		keys = append(keys, key)
+	}
+	for _, key := range app.okeys {
+		keys = append(keys, key)
+	}
+	sort.SliceStable(keys, func(i, j int) bool { return keys[i].Name() < keys[j].Name() })
+	return keys
 }
 
 // GetSubspace returns a param subspace for a given module name.
