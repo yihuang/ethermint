@@ -54,8 +54,9 @@ schema = 3
     version = "v0.1.0"
     hash = "sha256-/gWvrqvy6bW90+NU66T+9QysYgvG1VbwfYJZ8tkqpeA="
   [mod."cosmossdk.io/x/tx"]
-    version = "v0.13.1"
-    hash = "sha256-dHv2Zx8xbqfv1Gq0syh33G7TFJOVx4857QMH4b8Jj9k="
+    version = "v0.0.0-20240410035034-e8854d5aada6"
+    hash = "sha256-jhCBzToU7KglOA4CuY16ogOA0dZ4ESX2HWshhgYUjvE="
+    replaced = "github.com/crypto-org-chain/cosmos-sdk/x/tx"
   [mod."cosmossdk.io/x/upgrade"]
     version = "v0.1.1"
     hash = "sha256-bM9ybpaibMH7k4M6/QAXCZ3fJcADfJHxvMgp4AVUihs="
