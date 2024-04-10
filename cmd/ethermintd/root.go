@@ -71,7 +71,7 @@ func (ao emptyAppOptions) Get(_ string) interface{} { return nil }
 // main function.
 func NewRootCmd() (*cobra.Command, ethermint.EncodingConfig) {
 	tempApp := app.NewEthermintApp(cmtlog.NewNopLogger(), dbm.NewMemDB(), nil, true, emptyAppOptions{})
-	encodingConfig := app.MakeConfigForTest()
+	encodingConfig := tempApp.EncodingConfig()
 	initClientCtx := client.Context{}.
 		WithCodec(encodingConfig.Codec).
 		WithInterfaceRegistry(encodingConfig.InterfaceRegistry).

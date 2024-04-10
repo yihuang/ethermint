@@ -208,8 +208,6 @@ cosmossdk.io/x/evidence v0.1.0 h1:J6OEyDl1rbykksdGynzPKG5R/zm6TacwW2fbLTW4nCk=
 cosmossdk.io/x/evidence v0.1.0/go.mod h1:hTaiiXsoiJ3InMz1uptgF0BnGqROllAN8mwisOMMsfw=
 cosmossdk.io/x/feegrant v0.1.0 h1:c7s3oAq/8/UO0EiN1H5BIjwVntujVTkYs35YPvvrdQk=
 cosmossdk.io/x/feegrant v0.1.0/go.mod h1:4r+FsViJRpcZif/yhTn+E0E6OFfg4n0Lx+6cCtnZElU=
-cosmossdk.io/x/tx v0.13.1 h1:Mg+EMp67Pz+NukbJqYxuo8uRp7N/a9uR+oVS9pONtj8=
-cosmossdk.io/x/tx v0.13.1/go.mod h1:CBCU6fsRVz23QGFIQBb1DNX2DztJCf3jWyEkHY2nJQ0=
 cosmossdk.io/x/upgrade v0.1.1 h1:aoPe2gNvH+Gwt/Pgq3dOxxQVU3j5P6Xf+DaUJTDZATc=
 cosmossdk.io/x/upgrade v0.1.1/go.mod h1:MNLptLPcIFK9CWt7Ra//8WUZAxweyRDNcbs5nkOcQy0=
 dmitri.shuralyov.com/gpu/mtl v0.0.0-20190408044501-666a987793e9/go.mod h1:H6x//7gZCb22OMCxBHrMx7a5I7Hp++hsVxbQ4BYO7hU=
@@ -419,6 +417,8 @@ github.com/crypto-org-chain/cosmos-sdk v0.46.0-beta2.0.20240408014408-56c165536d
 github.com/crypto-org-chain/cosmos-sdk v0.46.0-beta2.0.20240408014408-56c165536d0a/go.mod h1:nRk8EA8/fEG4zSme2i/Rq5z3k7TrlsHkOYhrY79hhD8=
 github.com/crypto-org-chain/cosmos-sdk/store v0.0.0-20240408014408-56c165536d0a h1:YHeIe/VPKf7xK7xxLWUzvspFZJY6fDT6Epj+MH9dLOc=
 github.com/crypto-org-chain/cosmos-sdk/store v0.0.0-20240408014408-56c165536d0a/go.mod h1:lfuLI1f4o+0SGtlHQS4x5qsjRcZZfYqG8bp3k8hM0M8=
+github.com/crypto-org-chain/cosmos-sdk/x/tx v0.0.0-20240410035034-e8854d5aada6 h1:oQVP5BWGHvbuY37s+SUKNFu74y2oFpp6lWgBbVkm7oU=
+github.com/crypto-org-chain/cosmos-sdk/x/tx v0.0.0-20240410035034-e8854d5aada6/go.mod h1:CBCU6fsRVz23QGFIQBb1DNX2DztJCf3jWyEkHY2nJQ0=
 github.com/crypto-org-chain/go-block-stm v0.0.0-20240408011717-9f11af197bde h1:sQIHTJfVt5VTrF7po9eZiFkZiPjlHbFvnXtGCOoBjNM=
 github.com/crypto-org-chain/go-block-stm v0.0.0-20240408011717-9f11af197bde/go.mod h1:iwQTX9xMX8NV9k3o2BiWXA0SswpsZrDk5q3gA7nWYiE=
 github.com/crypto-org-chain/go-ethereum v1.10.20-0.20231207063621-43cf32d91c3e h1:vnyepPQ/m25+19xcTuBUdRxmltZ/EjVWNqEjhg7Ummk=
