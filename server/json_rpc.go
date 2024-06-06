@@ -29,6 +29,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/server"
 	ethlog "github.com/ethereum/go-ethereum/log"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
+	"github.com/evmos/ethermint/app"
 	"github.com/evmos/ethermint/rpc"
 	"github.com/evmos/ethermint/rpc/stream"
 
@@ -41,12 +42,17 @@ const (
 	MaxRetry        = 6
 )
 
+type AppWithPendingTxStream interface {
+	RegisterPendingTxListener(listener app.PendingTxListener)
+}
+
 // StartJSONRPC starts the JSON-RPC server
 func StartJSONRPC(srvCtx *server.Context,
 	clientCtx client.Context,
 	g *errgroup.Group,
 	config *config.Config,
 	indexer ethermint.EVMTxIndexer,
+	app AppWithPendingTxStream,
 ) (*http.Server, chan struct{}, error) {
 	logger := srvCtx.Logger.With("module", "geth")
 
@@ -68,6 +74,8 @@ func StartJSONRPC(srvCtx *server.Context,
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create rpc streams after %d attempts: %w", MaxRetry, err)
 	}
+
+	app.RegisterPendingTxListener(rpcStream.ListenPendingTx)
 
 	ethlog.Root().SetHandler(ethlog.FuncHandler(func(r *ethlog.Record) error {
 		switch r.Lvl {

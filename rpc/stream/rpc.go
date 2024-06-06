@@ -30,7 +30,6 @@ const (
 )
 
 var (
-	txEvents  = tmtypes.QueryForEvent(tmtypes.EventTx).String()
 	evmEvents = cmtquery.MustCompile(fmt.Sprintf("%s='%s' AND %s.%s='%s'",
 		tmtypes.EventTypeKey,
 		tmtypes.EventTx,
@@ -51,36 +50,32 @@ type RPCStream struct {
 	logger    log.Logger
 	txDecoder sdk.TxDecoder
 
-	headerStream *Stream[RPCHeader]
-	txStream     *Stream[common.Hash]
-	logStream    *Stream[*ethtypes.Log]
+	headerStream    *Stream[RPCHeader]
+	pendingTxStream *Stream[common.Hash]
+	logStream       *Stream[*ethtypes.Log]
 
 	wg sync.WaitGroup
 }
 
-func NewRPCStreams(evtClient rpcclient.EventsClient, logger log.Logger, txDecoder sdk.TxDecoder) (*RPCStream, error) {
+func NewRPCStreams(
+	evtClient rpcclient.EventsClient,
+	logger log.Logger,
+	txDecoder sdk.TxDecoder,
+) (*RPCStream, error) {
 	s := &RPCStream{
 		evtClient: evtClient,
 		logger:    logger,
 		txDecoder: txDecoder,
 
-		headerStream: NewStream[RPCHeader](headerStreamSegmentSize, headerStreamCapacity),
-		txStream:     NewStream[common.Hash](txStreamSegmentSize, txStreamCapacity),
-		logStream:    NewStream[*ethtypes.Log](logStreamSegmentSize, logStreamCapacity),
+		headerStream:    NewStream[RPCHeader](headerStreamSegmentSize, headerStreamCapacity),
+		pendingTxStream: NewStream[common.Hash](txStreamSegmentSize, txStreamCapacity),
+		logStream:       NewStream[*ethtypes.Log](logStreamSegmentSize, logStreamCapacity),
 	}
 
 	ctx := context.Background()
 
 	chBlocks, err := s.evtClient.Subscribe(ctx, streamSubscriberName, blockEvents, subscribBufferSize)
 	if err != nil {
-		return nil, err
-	}
-
-	chTx, err := s.evtClient.Subscribe(ctx, streamSubscriberName, txEvents, subscribBufferSize)
-	if err != nil {
-		if err := s.evtClient.UnsubscribeAll(ctx, streamSubscriberName); err != nil {
-			s.logger.Error("failed to unsubscribe", "err", err)
-		}
 		return nil, err
 	}
 
@@ -92,7 +87,7 @@ func NewRPCStreams(evtClient rpcclient.EventsClient, logger log.Logger, txDecode
 		return nil, err
 	}
 
-	go s.start(&s.wg, chBlocks, chTx, chLogs)
+	go s.start(&s.wg, chBlocks, chLogs)
 
 	return s, nil
 }
@@ -109,18 +104,34 @@ func (s *RPCStream) HeaderStream() *Stream[RPCHeader] {
 	return s.headerStream
 }
 
-func (s *RPCStream) TxStream() *Stream[common.Hash] {
-	return s.txStream
+func (s *RPCStream) PendingTxStream() *Stream[common.Hash] {
+	return s.pendingTxStream
 }
 
 func (s *RPCStream) LogStream() *Stream[*ethtypes.Log] {
 	return s.logStream
 }
 
+// ListenPendingTx is a callback passed to application to listen for pending transactions in CheckTx.
+func (s *RPCStream) ListenPendingTx(bytes []byte) {
+	tx, err := s.txDecoder(bytes)
+	if err != nil {
+		s.logger.Error("fail to decode tx", "error", err.Error())
+		return
+	}
+
+	var hashes []common.Hash
+	for _, msg := range tx.GetMsgs() {
+		if ethTx, ok := msg.(*evmtypes.MsgEthereumTx); ok {
+			hashes = append(hashes, ethTx.AsTransaction().Hash())
+		}
+	}
+	s.pendingTxStream.Add(hashes...)
+}
+
 func (s *RPCStream) start(
 	wg *sync.WaitGroup,
 	chBlocks <-chan coretypes.ResultEvent,
-	chTx <-chan coretypes.ResultEvent,
 	chLogs <-chan coretypes.ResultEvent,
 ) {
 	wg.Add(1)
@@ -150,31 +161,7 @@ func (s *RPCStream) start(
 			// TODO: fetch bloom from events
 			header := types.EthHeaderFromTendermint(data.Block.Header, ethtypes.Bloom{}, baseFee)
 			s.headerStream.Add(RPCHeader{EthHeader: header, Hash: common.BytesToHash(data.Block.Header.Hash())})
-		case ev, ok := <-chTx:
-			if !ok {
-				chTx = nil
-				break
-			}
 
-			data, ok := ev.Data.(tmtypes.EventDataTx)
-			if !ok {
-				s.logger.Error("event data type mismatch", "type", fmt.Sprintf("%T", ev.Data))
-				continue
-			}
-
-			tx, err := s.txDecoder(data.Tx)
-			if err != nil {
-				s.logger.Error("fail to decode tx", "error", err.Error())
-				continue
-			}
-
-			var hashes []common.Hash
-			for _, msg := range tx.GetMsgs() {
-				if ethTx, ok := msg.(*evmtypes.MsgEthereumTx); ok {
-					hashes = append(hashes, ethTx.AsTransaction().Hash())
-				}
-			}
-			s.txStream.Add(hashes...)
 		case ev, ok := <-chLogs:
 			if !ok {
 				chLogs = nil
@@ -201,7 +188,7 @@ func (s *RPCStream) start(
 			s.logStream.Add(txLogs...)
 		}
 
-		if chBlocks == nil && chTx == nil && chLogs == nil {
+		if chBlocks == nil && chLogs == nil {
 			break
 		}
 	}
