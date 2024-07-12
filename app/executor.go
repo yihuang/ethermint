@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"io"
+	"sync/atomic"
 
 	"cosmossdk.io/store/cachemulti"
 	storetypes "cosmossdk.io/store/types"
@@ -41,9 +42,10 @@ func STMTxExecutor(stores []storetypes.StoreKey, workers int) baseapp.TxExecutor
 			return nil, nil
 		}
 		results := make([]*abci.ExecTxResult, blockSize)
-		incarnationCache := make([]map[string]any, blockSize)
+		incarnationCache := make([]atomic.Pointer[map[string]any], blockSize)
 		for i := 0; i < blockSize; i++ {
-			incarnationCache[i] = make(map[string]any)
+			m := make(map[string]any)
+			incarnationCache[i].Store(&m)
 		}
 		if err := blockstm.ExecuteBlock(
 			ctx,
@@ -52,8 +54,21 @@ func STMTxExecutor(stores []storetypes.StoreKey, workers int) baseapp.TxExecutor
 			stmMultiStoreWrapper{ms},
 			workers,
 			func(txn blockstm.TxnIndex, ms blockstm.MultiStore) {
-				result := deliverTxWithMultiStore(int(txn), msWrapper{ms}, incarnationCache[txn])
+				var cache map[string]any
+
+				// only one of the concurrent incarnations gets the cache if there are any, otherwise execute without
+				// cache, concurrent incarnations should be rare.
+				v := incarnationCache[txn].Swap(nil)
+				if v != nil {
+					cache = *v
+				}
+
+				result := deliverTxWithMultiStore(int(txn), msWrapper{ms}, cache)
 				results[txn] = result
+
+				if v != nil {
+					incarnationCache[txn].Store(v)
+				}
 			},
 		); err != nil {
 			return nil, err

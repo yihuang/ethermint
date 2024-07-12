@@ -114,7 +114,9 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 		}
 
 		if v, ok := ctx.GetIncarnationCache(EthSigVerificationResultCacheKey); ok {
-			err = v.(error)
+			if v != nil {
+				err = v.(error)
+			}
 		} else {
 			err = VerifyEthSig(tx, ethSigner)
 			ctx.SetIncarnationCache(EthSigVerificationResultCacheKey, err)
