@@ -17,11 +17,11 @@ import (
 func DefaultTxExecutor(_ context.Context,
 	blockSize int,
 	ms storetypes.MultiStore,
-	deliverTxWithMultiStore func(int, storetypes.MultiStore) *abci.ExecTxResult,
+	deliverTxWithMultiStore func(int, storetypes.MultiStore, map[string]any) *abci.ExecTxResult,
 ) ([]*abci.ExecTxResult, error) {
 	results := make([]*abci.ExecTxResult, blockSize)
 	for i := 0; i < blockSize; i++ {
-		results[i] = deliverTxWithMultiStore(i, ms)
+		results[i] = deliverTxWithMultiStore(i, ms, nil)
 	}
 	return evmtypes.PatchTxResponses(results), nil
 }
@@ -35,12 +35,16 @@ func STMTxExecutor(stores []storetypes.StoreKey, workers int) baseapp.TxExecutor
 		ctx context.Context,
 		blockSize int,
 		ms storetypes.MultiStore,
-		deliverTxWithMultiStore func(int, storetypes.MultiStore) *abci.ExecTxResult,
+		deliverTxWithMultiStore func(int, storetypes.MultiStore, map[string]any) *abci.ExecTxResult,
 	) ([]*abci.ExecTxResult, error) {
 		if blockSize == 0 {
 			return nil, nil
 		}
 		results := make([]*abci.ExecTxResult, blockSize)
+		incarnationCache := make([]map[string]any, blockSize)
+		for i := 0; i < blockSize; i++ {
+			incarnationCache[i] = make(map[string]any)
+		}
 		if err := blockstm.ExecuteBlock(
 			ctx,
 			blockSize,
@@ -48,7 +52,7 @@ func STMTxExecutor(stores []storetypes.StoreKey, workers int) baseapp.TxExecutor
 			stmMultiStoreWrapper{ms},
 			workers,
 			func(txn blockstm.TxnIndex, ms blockstm.MultiStore) {
-				result := deliverTxWithMultiStore(int(txn), msWrapper{ms})
+				result := deliverTxWithMultiStore(int(txn), msWrapper{ms}, incarnationCache[txn])
 				results[txn] = result
 			},
 		); err != nil {
