@@ -32,6 +32,8 @@ import (
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
 
+const EthSigVerificationResultCacheKey = "ante:EthSigVerificationResult"
+
 // HandlerOptions extend the SDK's AnteHandler options by requiring the IBC
 // channel keeper, EVM Keeper and Fee Market Keeper.
 type HandlerOptions struct {
@@ -111,7 +113,15 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 			return ctx, err
 		}
 
-		if err := VerifyEthSig(tx, ethSigner); err != nil {
+		if v, ok := ctx.GetIncarnationCache(EthSigVerificationResultCacheKey); ok {
+			if v != nil {
+				err = v.(error)
+			}
+		} else {
+			err = VerifyEthSig(tx, ethSigner)
+			ctx.SetIncarnationCache(EthSigVerificationResultCacheKey, err)
+		}
+		if err != nil {
 			return ctx, err
 		}
 
