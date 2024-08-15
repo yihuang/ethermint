@@ -92,7 +92,8 @@ func (suite *AnteTestSuite) TestNewEthAccountVerificationDecorator() {
 			tc.malleate()
 			suite.Require().NoError(vmdb.Commit())
 
-			err := ante.VerifyEthAccount(suite.ctx.WithIsCheckTx(tc.checkTx), tc.tx, suite.app.EvmKeeper, suite.app.AccountKeeper, evmtypes.DefaultEVMDenom)
+			accountGetter := ante.NewCachedAccountGetter(suite.ctx, suite.app.AccountKeeper)
+			err := ante.VerifyEthAccount(suite.ctx.WithIsCheckTx(tc.checkTx), tc.tx, suite.app.EvmKeeper, evmtypes.DefaultEVMDenom, accountGetter)
 
 			if tc.expPass {
 				suite.Require().NoError(err)
@@ -147,7 +148,8 @@ func (suite *AnteTestSuite) TestEthNonceVerificationDecorator() {
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
 			tc.malleate()
-			err := ante.CheckAndSetEthSenderNonce(suite.ctx.WithIsReCheckTx(tc.reCheckTx), tc.tx, suite.app.AccountKeeper, false)
+			accountGetter := ante.NewCachedAccountGetter(suite.ctx, suite.app.AccountKeeper)
+			err := ante.CheckAndSetEthSenderNonce(suite.ctx.WithIsReCheckTx(tc.reCheckTx), tc.tx, suite.app.AccountKeeper, false, accountGetter)
 
 			if tc.expPass {
 				suite.Require().NoError(err)
@@ -514,7 +516,7 @@ func (suite *AnteTestSuite) TestEthIncrementSenderSequenceDecorator() {
 			"account not set to store",
 			tx,
 			func() {},
-			false, false,
+			true, false,
 		},
 		{
 			"success - create contract",
@@ -536,15 +538,16 @@ func (suite *AnteTestSuite) TestEthIncrementSenderSequenceDecorator() {
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
 			tc.malleate()
+			accountGetter := ante.NewCachedAccountGetter(suite.ctx, suite.app.AccountKeeper)
 
 			if tc.expPanic {
 				suite.Require().Panics(func() {
-					_ = ante.CheckAndSetEthSenderNonce(suite.ctx, tc.tx, suite.app.AccountKeeper, false)
+					_ = ante.CheckAndSetEthSenderNonce(suite.ctx, tc.tx, suite.app.AccountKeeper, false, accountGetter)
 				})
 				return
 			}
 
-			err := ante.CheckAndSetEthSenderNonce(suite.ctx, tc.tx, suite.app.AccountKeeper, false)
+			err := ante.CheckAndSetEthSenderNonce(suite.ctx, tc.tx, suite.app.AccountKeeper, false, accountGetter)
 
 			if tc.expPass {
 				suite.Require().NoError(err)

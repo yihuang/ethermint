@@ -28,21 +28,46 @@ import (
 
 	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/keeper"
+	"github.com/evmos/ethermint/x/evm/statedb"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/params"
 )
 
+type AccountGetter func(sdk.AccAddress) sdk.AccountI
+
+// NewCachedAccountGetter cache the account objects during the ante handler execution,
+// it's safe because there's no store branching in the ante handlers,
+// it also creates new account in memory if it doesn't exist in the store.
+func NewCachedAccountGetter(ctx sdk.Context, ak evmtypes.AccountKeeper) AccountGetter {
+	accounts := make(map[string]sdk.AccountI, 1)
+	return func(addr sdk.AccAddress) sdk.AccountI {
+		acc := accounts[string(addr)]
+		if acc == nil {
+			acc = ak.GetAccount(ctx, addr)
+			if acc == nil {
+				// we create a new account in memory if it doesn't exist,
+				// which is only set to store when updated.
+				acc = ak.NewAccountWithAddress(ctx, addr)
+			}
+			accounts[string(addr)] = acc
+		}
+		return acc
+	}
+}
+
 // VerifyEthAccount validates checks that the sender balance is greater than the total transaction cost.
-// The account will be set to store if it doesn't exis, i.e cannot be found on store.
+// The account will be created in memory if it doesn't exist, i.e cannot be found on store, which will eventually set to
+// store when increasing nonce.
 // This AnteHandler decorator will fail if:
 // - any of the msgs is not a MsgEthereumTx
 // - from address is empty
 // - account balance is lower than the transaction cost
 func VerifyEthAccount(
 	ctx sdk.Context, tx sdk.Tx,
-	evmKeeper EVMKeeper, ak evmtypes.AccountKeeper, evmDenom string,
+	evmKeeper EVMKeeper, evmDenom string,
+	accountGetter AccountGetter,
 ) error {
 	if !ctx.IsCheckTx() {
 		return nil
@@ -63,13 +88,9 @@ func VerifyEthAccount(
 		}
 
 		// check whether the sender address is EOA
-		fromAddr := common.BytesToAddress(from)
-		acct := evmKeeper.GetAccount(ctx, fromAddr)
-
-		if acct == nil {
-			acc := ak.NewAccountWithAddress(ctx, from)
-			ak.SetAccount(ctx, acc)
-		} else if acct.IsContract() {
+		acct := statedb.NewAccountFromSdkAccount(accountGetter(from))
+		if acct.IsContract() {
+			fromAddr := common.BytesToAddress(from)
 			return errorsmod.Wrapf(errortypes.ErrInvalidType,
 				"the sender is not EOA: address %s, codeHash <%s>", fromAddr, acct.CodeHash)
 		}
@@ -249,7 +270,7 @@ func canTransfer(ctx sdk.Context, evmKeeper EVMKeeper, denom string, from common
 // contract creation, the nonce will be incremented during the transaction execution and not within
 // this AnteHandler decorator.
 func CheckAndSetEthSenderNonce(
-	ctx sdk.Context, tx sdk.Tx, ak evmtypes.AccountKeeper, unsafeUnOrderedTx bool,
+	ctx sdk.Context, tx sdk.Tx, ak evmtypes.AccountKeeper, unsafeUnOrderedTx bool, accountGetter AccountGetter,
 ) error {
 	for _, msg := range tx.GetMsgs() {
 		msgEthTx, ok := msg.(*evmtypes.MsgEthereumTx)
@@ -260,11 +281,12 @@ func CheckAndSetEthSenderNonce(
 		tx := msgEthTx.AsTransaction()
 
 		// increase sequence of sender
-		acc := ak.GetAccount(ctx, msgEthTx.GetFrom())
+		from := msgEthTx.GetFrom()
+		acc := accountGetter(from)
 		if acc == nil {
 			return errorsmod.Wrapf(
 				errortypes.ErrUnknownAddress,
-				"account %s is nil", common.BytesToAddress(msgEthTx.GetFrom().Bytes()),
+				"account %s is nil", common.BytesToAddress(from.Bytes()),
 			)
 		}
 		nonce := acc.GetSequence()

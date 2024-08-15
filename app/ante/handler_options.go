@@ -87,7 +87,6 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 		feemarketParams := &blockCfg.FeeMarketParams
 		baseFee := blockCfg.BaseFee
 		rules := blockCfg.Rules
-		ethSigner := ethtypes.MakeSigner(blockCfg.ChainConfig, blockCfg.BlockNumber)
 
 		// all transactions must implement FeeTx
 		_, ok := tx.(sdk.FeeTx)
@@ -118,6 +117,7 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 				err = v.(error)
 			}
 		} else {
+			ethSigner := ethtypes.MakeSigner(blockCfg.ChainConfig, blockCfg.BlockNumber)
 			err = VerifyEthSig(tx, ethSigner)
 			ctx.SetIncarnationCache(EthSigVerificationResultCacheKey, err)
 		}
@@ -125,7 +125,11 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 			return ctx, err
 		}
 
-		if err := VerifyEthAccount(ctx, tx, options.EvmKeeper, options.AccountKeeper, evmDenom); err != nil {
+		// AccountGetter cache the account objects during the ante handler execution,
+		// it's safe because there's no store branching in the ante handlers.
+		accountGetter := NewCachedAccountGetter(ctx, options.AccountKeeper)
+
+		if err := VerifyEthAccount(ctx, tx, options.EvmKeeper, evmDenom, accountGetter); err != nil {
 			return ctx, err
 		}
 
@@ -141,7 +145,7 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 			return ctx, err
 		}
 
-		if err := CheckAndSetEthSenderNonce(ctx, tx, options.AccountKeeper, options.UnsafeUnorderedTx); err != nil {
+		if err := CheckAndSetEthSenderNonce(ctx, tx, options.AccountKeeper, options.UnsafeUnorderedTx, accountGetter); err != nil {
 			return ctx, err
 		}
 
