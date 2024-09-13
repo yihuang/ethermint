@@ -33,6 +33,8 @@ import (
 	"github.com/evmos/ethermint/x/evm/types"
 )
 
+const FlagEvmDenom = "evm-denom"
+
 // GetTxCmd returns the transaction commands for this module
 func GetTxCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -77,12 +79,20 @@ func NewRawTxCmd() *cobra.Command {
 				return err
 			}
 
-			rsp, err := rpctypes.NewQueryClient(clientCtx).Params(cmd.Context(), &types.QueryParamsRequest{})
+			evmDenom, err := cmd.Flags().GetString(FlagEvmDenom)
 			if err != nil {
 				return err
 			}
 
-			tx, err := msg.BuildTx(clientCtx.TxConfig.NewTxBuilder(), rsp.Params.EvmDenom)
+			if evmDenom == "" {
+				rsp, err := rpctypes.NewQueryClient(clientCtx).Params(cmd.Context(), &types.QueryParamsRequest{})
+				if err != nil {
+					return err
+				}
+				evmDenom = rsp.Params.EvmDenom
+			}
+
+			tx, err := msg.BuildTx(clientCtx.TxConfig.NewTxBuilder(), evmDenom)
 			if err != nil {
 				return err
 			}
@@ -129,5 +139,6 @@ func NewRawTxCmd() *cobra.Command {
 	}
 
 	flags.AddTxFlagsToCmd(cmd)
+	cmd.Flags().String(FlagEvmDenom, "", "defines the EVM denomination which could be used for generate only when offline")
 	return cmd
 }

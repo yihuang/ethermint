@@ -67,6 +67,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (block-stm) [#510](https://github.com/crypto-org-chain/ethermint/pull/510) Include a fix to avoid nondeterministic account set when stm workers execute in parallel.
 * (rpc) [#521](https://github.com/crypto-org-chain/ethermint/pull/521) Align hash and miner in subscribe newHeads with eth_getBlockByNumber.
 * (rpc) [#516](https://github.com/crypto-org-chain/ethermint/pull/516) Avoid method eth_chainId crashed due to nil pointer on IsEIP155 check.
+* (cli) [#524](https://github.com/crypto-org-chain/ethermint/pull/524) Allow tx evm raw run for generate only when offline with evm-denom flag.
 
 ### Improvements
 
