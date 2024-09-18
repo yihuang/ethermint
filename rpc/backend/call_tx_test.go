@@ -22,6 +22,7 @@ func (suite *BackendTestSuite) TestResend() {
 	gasPrice := new(hexutil.Big)
 	toAddr := tests.GenerateAddress()
 	chainID := (*hexutil.Big)(suite.backend.chainID)
+	validator := sdk.AccAddress(tests.GenerateAddress().Bytes())
 	callArgs := evmtypes.TransactionArgs{
 		From:                 nil,
 		To:                   &toAddr,
@@ -67,6 +68,7 @@ func (suite *BackendTestSuite) TestResend() {
 				RegisterBlock(client, 1, nil)
 				RegisterBlockResults(client, 1)
 				RegisterBaseFeeDisabled(queryClient)
+				RegisterValidatorAccount(queryClient, validator)
 			},
 			evmtypes.TransactionArgs{
 				Nonce:   &txNonce,
@@ -89,6 +91,7 @@ func (suite *BackendTestSuite) TestResend() {
 				RegisterBlock(client, 1, nil)
 				RegisterBlockResults(client, 1)
 				RegisterBaseFee(queryClient, baseFee)
+				RegisterValidatorAccount(queryClient, validator)
 			},
 			evmtypes.TransactionArgs{
 				Nonce: &txNonce,
@@ -108,6 +111,7 @@ func (suite *BackendTestSuite) TestResend() {
 				RegisterBlock(client, 1, nil)
 				RegisterBlockResults(client, 1)
 				RegisterBaseFeeDisabled(queryClient)
+				RegisterValidatorAccount(queryClient, validator)
 			},
 			evmtypes.TransactionArgs{
 				Nonce:                &txNonce,
@@ -161,6 +165,7 @@ func (suite *BackendTestSuite) TestResend() {
 				RegisterBlock(client, 1, nil)
 				RegisterBlockResults(client, 1)
 				RegisterBaseFee(queryClient, baseFee)
+				RegisterValidatorAccount(queryClient, validator)
 			},
 			evmtypes.TransactionArgs{
 				Nonce:                &txNonce,
@@ -184,6 +189,7 @@ func (suite *BackendTestSuite) TestResend() {
 				RegisterBlock(client, 1, nil)
 				RegisterBlockResults(client, 1)
 				RegisterBaseFee(queryClient, baseFee)
+				RegisterValidatorAccount(queryClient, validator)
 			},
 			evmtypes.TransactionArgs{
 				Nonce:                &txNonce,
@@ -208,6 +214,7 @@ func (suite *BackendTestSuite) TestResend() {
 				RegisterParams(queryClient, &header, 1)
 				RegisterParamsWithoutHeader(queryClient, 1)
 				RegisterUnconfirmedTxsError(client, nil)
+				RegisterValidatorAccount(queryClient, validator)
 			},
 			evmtypes.TransactionArgs{
 				Nonce:                &txNonce,
@@ -236,6 +243,7 @@ func (suite *BackendTestSuite) TestResend() {
 				RegisterParams(queryClient, &header, 1)
 				RegisterParamsWithoutHeader(queryClient, 1)
 				RegisterUnconfirmedTxsEmpty(client, nil)
+				RegisterValidatorAccount(queryClient, validator)
 			},
 			evmtypes.TransactionArgs{
 				Nonce:                &txNonce,
@@ -437,6 +445,7 @@ func (suite *BackendTestSuite) TestDoCall() {
 
 func (suite *BackendTestSuite) TestGasPrice() {
 	defaultGasPrice := (*hexutil.Big)(big.NewInt(1))
+	validator := sdk.AccAddress(tests.GenerateAddress().Bytes())
 
 	testCases := []struct {
 		name         string
@@ -456,6 +465,7 @@ func (suite *BackendTestSuite) TestGasPrice() {
 				RegisterBlock(client, 1, nil)
 				RegisterBlockResults(client, 1)
 				RegisterBaseFee(queryClient, sdk.NewInt(1))
+				RegisterValidatorAccount(queryClient, validator)
 			},
 			defaultGasPrice,
 			true,
@@ -472,6 +482,7 @@ func (suite *BackendTestSuite) TestGasPrice() {
 				RegisterBlock(client, 1, nil)
 				RegisterBlockResults(client, 1)
 				RegisterBaseFee(queryClient, sdk.NewInt(1))
+				RegisterValidatorAccount(queryClient, validator)
 			},
 			defaultGasPrice,
 			false,

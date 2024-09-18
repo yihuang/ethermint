@@ -28,7 +28,7 @@ jobs:
       - uses: golangci/golangci-lint-action@v3.4.0
         with:
           # Required: the version of golangci-lint is required and must be specified without patch version: we always use the latest patch version.
-          version: latest
+          version: v1.60.1 # FIXME: Disabled until integer overflow is backported https://github.com/crypto-org-chain/ethermint/pull/517
           args: --timeout 10m
           github-token: ${{ secrets.github_token }}
         # Check only if there are differences in the source code

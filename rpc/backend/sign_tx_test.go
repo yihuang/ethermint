@@ -33,8 +33,8 @@ func (suite *BackendTestSuite) TestSendTransaction() {
 		Gas:      &gas,
 		Nonce:    &nonce,
 	}
-
 	hash := common.Hash{}
+	validator := sdk.AccAddress(tests.GenerateAddress().Bytes())
 
 	testCases := []struct {
 		name         string
@@ -77,6 +77,7 @@ func (suite *BackendTestSuite) TestSendTransaction() {
 				RegisterBlock(client, 1, nil)
 				RegisterBlockResults(client, 1)
 				RegisterBaseFee(queryClient, baseFee)
+				RegisterValidatorAccount(queryClient, validator)
 			},
 			evmtypes.TransactionArgs{
 				From:     &from,
@@ -108,6 +109,7 @@ func (suite *BackendTestSuite) TestSendTransaction() {
 				txEncoder := suite.backend.clientCtx.TxConfig.TxEncoder()
 				txBytes, _ := txEncoder(tx)
 				RegisterBroadcastTxError(client, txBytes)
+				RegisterValidatorAccount(queryClient, validator)
 			},
 			callArgsDefault,
 			common.Hash{},
@@ -133,6 +135,7 @@ func (suite *BackendTestSuite) TestSendTransaction() {
 				txEncoder := suite.backend.clientCtx.TxConfig.TxEncoder()
 				txBytes, _ := txEncoder(tx)
 				RegisterBroadcastTx(client, txBytes)
+				RegisterValidatorAccount(queryClient, validator)
 			},
 			callArgsDefault,
 			hash,

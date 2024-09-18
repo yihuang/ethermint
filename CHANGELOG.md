@@ -47,6 +47,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (rpc) [#473](https://github.com/crypto-org-chain/ethermint/pull/473) Avoid panic on invalid elasticity_multiplier.
 * (rpc) [#480](https://github.com/crypto-org-chain/ethermint/pull/480) Fix parsed logs from old events.
 * (rpc) [#488](https://github.com/crypto-org-chain/ethermint/pull/488) Fix handling of pending transactions related APIs.
+* (rpc) [#521](https://github.com/crypto-org-chain/ethermint/pull/521) Align hash and miner in subscribe newHeads with eth_getBlockByNumber.
 
 ### Improvements
 

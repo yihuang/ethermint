@@ -322,8 +322,11 @@ func (b *Backend) HeaderByNumber(blockNum rpctypes.BlockNumber) (*ethtypes.Heade
 		// handle the error for pruned node.
 		b.logger.Error("failed to fetch Base Fee from prunned block. Check node prunning configuration", "height", resBlock.Block.Height, "error", err)
 	}
-
-	ethHeader := rpctypes.EthHeaderFromTendermint(resBlock.Block.Header, bloom, baseFee)
+	validator, err := b.getValidatorAccount(resBlock)
+	if err != nil {
+		return nil, err
+	}
+	ethHeader := rpctypes.EthHeaderFromTendermint(resBlock.Block.Header, bloom, baseFee, validator)
 	return ethHeader, nil
 }
 
@@ -352,8 +355,11 @@ func (b *Backend) HeaderByHash(blockHash common.Hash) (*ethtypes.Header, error) 
 		// handle the error for pruned node.
 		b.logger.Error("failed to fetch Base Fee from prunned block. Check node prunning configuration", "height", resBlock.Block.Height, "error", err)
 	}
-
-	ethHeader := rpctypes.EthHeaderFromTendermint(resBlock.Block.Header, bloom, baseFee)
+	validator, err := b.getValidatorAccount(resBlock)
+	if err != nil {
+		return nil, err
+	}
+	ethHeader := rpctypes.EthHeaderFromTendermint(resBlock.Block.Header, bloom, baseFee, validator)
 	return ethHeader, nil
 }
 
@@ -505,8 +511,11 @@ func (b *Backend) EthBlockFromTendermintBlock(
 		// handle error for pruned node and log
 		b.logger.Error("failed to fetch Base Fee from prunned block. Check node prunning configuration", "height", height, "error", err)
 	}
-
-	ethHeader := rpctypes.EthHeaderFromTendermint(block.Header, bloom, baseFee)
+	validator, err := b.getValidatorAccount(resBlock)
+	if err != nil {
+		return nil, err
+	}
+	ethHeader := rpctypes.EthHeaderFromTendermint(block.Header, bloom, baseFee, validator)
 	msgs := b.EthMsgsFromTendermintBlock(resBlock, blockRes)
 
 	txs := make([]*ethtypes.Transaction, len(msgs))
