@@ -204,6 +204,18 @@ class CosmosCLI:
             )
         )
 
+    def account_by_num(self, num):
+        return json.loads(
+            self.raw(
+                "q",
+                "auth",
+                "address-by-acc-num",
+                num,
+                output="json",
+                node=self.node_rpc,
+            )
+        )
+
     def tx_search(self, events: str):
         "/tx_search"
         return json.loads(
@@ -264,7 +276,7 @@ class CosmosCLI:
 
     def transfer(self, from_, to, coins, generate_only=False, **kwargs):
         kwargs.setdefault("gas_prices", DEFAULT_GAS_PRICE)
-        return json.loads(
+        rsp = json.loads(
             self.raw(
                 "tx",
                 "bank",
@@ -278,6 +290,9 @@ class CosmosCLI:
                 **kwargs,
             )
         )
+        if not generate_only and rsp["code"] == 0:
+            rsp = self.event_query_tx_for(rsp["txhash"])
+        return rsp
 
     def get_delegated_amount(self, which_addr):
         return json.loads(
@@ -384,7 +399,7 @@ class CosmosCLI:
         )
 
     def make_multisig(self, name, signer1, signer2):
-        self.raw(
+        return self.raw(
             "keys",
             "add",
             name,
@@ -498,9 +513,12 @@ class CosmosCLI:
     def broadcast_tx(self, tx_file, **kwargs):
         kwargs.setdefault("broadcast_mode", "sync")
         kwargs.setdefault("output", "json")
-        return json.loads(
+        rsp = json.loads(
             self.raw("tx", "broadcast", tx_file, node=self.node_rpc, **kwargs)
         )
+        if rsp["code"] == 0:
+            rsp = self.event_query_tx_for(rsp["txhash"])
+        return rsp
 
     def broadcast_tx_json(self, tx, **kwargs):
         with tempfile.NamedTemporaryFile("w") as fp:
@@ -857,3 +875,43 @@ class CosmosCLI:
                 **(default_kwargs | kwargs),
             )
         )
+
+    def query_grant(self, granter, grantee):
+        "query grant details by granter and grantee addresses"
+        res = json.loads(
+            self.raw(
+                "query",
+                "feegrant",
+                "grant",
+                granter,
+                grantee,
+                home=self.data_dir,
+                node=self.node_rpc,
+                output="json",
+            )
+        )
+        res = res.get("allowance") or res
+        return res
+
+    def grant(self, granter, grantee, limit, **kwargs):
+        default_kwargs = self.get_default_kwargs()
+        rsp = json.loads(
+            self.raw(
+                "tx",
+                "feegrant",
+                "grant",
+                granter,
+                grantee,
+                "--period",
+                "60",
+                "--period-limit",
+                limit,
+                "-y",
+                home=self.data_dir,
+                stderr=subprocess.DEVNULL,
+                **(default_kwargs | kwargs),
+            )
+        )
+        if rsp["code"] == 0:
+            rsp = self.event_query_tx_for(rsp["txhash"])
+        return rsp

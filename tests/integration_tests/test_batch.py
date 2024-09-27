@@ -72,3 +72,50 @@ def test_batch_tx(ethermint):
     txs = w3.eth.get_block(receipts[0].blockNumber, True).transactions
     for i in range(3):
         assert txs[i].transactionIndex == i
+
+
+def test_multisig(ethermint, tmp_path):
+    cli = ethermint.cosmos_cli()
+    cli.make_multisig("multitest1", "signer1", "signer2")
+    multi_addr = cli.address("multitest1")
+    signer1 = cli.address("signer1")
+    denom = "aphoton"
+    amt = 2000000000000000000
+    rsp = cli.transfer(signer1, multi_addr, f"{amt}{denom}")
+    assert rsp["code"] == 0, rsp["raw_log"]
+    assert cli.balance(multi_addr, denom=denom) == amt
+
+    acc = cli.account(multi_addr)["account"]["value"]["base_account"]
+    res = cli.account_by_num(acc["account_number"])
+    assert res["account_address"] == multi_addr
+
+    m_txt = tmp_path / "m.txt"
+    p1_txt = tmp_path / "p1.txt"
+    p2_txt = tmp_path / "p2.txt"
+    tx_txt = tmp_path / "tx.txt"
+    amt = 1
+    signer2 = cli.address("signer2")
+    multi_tx = cli.transfer(
+        multi_addr,
+        signer2,
+        f"{amt}{denom}",
+        generate_only=True,
+    )
+    json.dump(multi_tx, m_txt.open("w"))
+    signature1 = cli.sign_multisig_tx(m_txt, multi_addr, "signer1")
+    json.dump(signature1, p1_txt.open("w"))
+    signature2 = cli.sign_multisig_tx(m_txt, multi_addr, "signer2")
+    json.dump(signature2, p2_txt.open("w"))
+    final_multi_tx = cli.combine_multisig_tx(
+        m_txt,
+        "multitest1",
+        p1_txt,
+        p2_txt,
+    )
+    json.dump(final_multi_tx, tx_txt.open("w"))
+    rsp = cli.broadcast_tx(tx_txt)
+    assert rsp["code"] == 0, rsp["raw_log"]
+    assert (
+        cli.account(multi_addr)["account"]["value"]["base_account"]["address"]
+        == acc["address"]
+    )
