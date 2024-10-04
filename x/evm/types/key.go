@@ -44,6 +44,7 @@ const (
 	prefixCode = iota + 1
 	prefixStorage
 	prefixParams
+	prefixHeaderHash
 )
 
 // prefix bytes for the EVM object store
@@ -55,9 +56,10 @@ const (
 
 // KVStore key prefixes
 var (
-	KeyPrefixCode    = []byte{prefixCode}
-	KeyPrefixStorage = []byte{prefixStorage}
-	KeyPrefixParams  = []byte{prefixParams}
+	KeyPrefixCode       = []byte{prefixCode}
+	KeyPrefixStorage    = []byte{prefixStorage}
+	KeyPrefixParams     = []byte{prefixParams}
+	KeyPrefixHeaderHash = []byte{prefixHeaderHash}
 )
 
 // Object Store key prefixes
@@ -108,5 +110,12 @@ func ObjectBloomKey(txIndex, msgIndex int) []byte {
 		panic(err)
 	}
 	binary.BigEndian.PutUint64(key[9:], value)
+	return key[:]
+}
+
+func GetHeaderHashKey(height uint64) []byte {
+	var key [1 + 8]byte
+	key[0] = prefixHeaderHash
+	binary.BigEndian.PutUint64(key[1:], height)
 	return key[:]
 }
