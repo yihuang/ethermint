@@ -35,7 +35,7 @@ var (
 	// DefaultEnableCall enables contract calls (i.e true)
 	DefaultEnableCall = true
 	// DefaultHeaderHashNum defines the default number of header hash to persist.
-	DefaultHeaderHashNum = uint64(10000)
+	DefaultHeaderHashNum = uint64(256)
 )
 
 // NewParams creates a new Params instance
