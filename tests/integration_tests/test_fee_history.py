@@ -1,5 +1,4 @@
 import hashlib
-import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -9,9 +8,9 @@ from web3 import Web3
 from .network import setup_custom_ethermint
 from .utils import (
     ADDRS,
-    approve_proposal,
     eth_to_bech32,
     send_transaction,
+    submit_gov_proposal,
     w3_wait_for_block,
     w3_wait_for_new_blocks,
 )
@@ -167,27 +166,21 @@ def update_feemarket_param(node, tmp_path, new_multiplier=2, new_denominator=200
     p["base_fee"] = new_base_fee
     p["elasticity_multiplier"] = new_multiplier
     p["base_fee_change_denominator"] = new_denominator
-    proposal = tmp_path / "proposal.json"
+
     # governance module account as signer
     data = hashlib.sha256("gov".encode()).digest()[:20]
-    signer = eth_to_bech32(data)
-    proposal_src = {
-        "messages": [
+    authority = eth_to_bech32(data)
+    submit_gov_proposal(
+        node,
+        tmp_path,
+        messages=[
             {
                 "@type": "/ethermint.feemarket.v1.MsgUpdateParams",
-                "authority": signer,
+                "authority": authority,
                 "params": p,
             }
         ],
-        "deposit": "2aphoton",
-        "title": "title",
-        "summary": "summary",
-    }
-    proposal.write_text(json.dumps(proposal_src))
-    rsp = cli.submit_gov_proposal(proposal, from_="community")
-    assert rsp["code"] == 0, rsp["raw_log"]
-    approve_proposal(node, rsp)
-    print("check params have been updated now")
+    )
     p = cli.get_params("feemarket")["params"]
     assert p["base_fee"] == new_base_fee
     assert p["elasticity_multiplier"] == new_multiplier

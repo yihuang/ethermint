@@ -357,6 +357,21 @@ def approve_proposal(n, rsp):
     assert proposal["status"] == "PROPOSAL_STATUS_PASSED", proposal
 
 
+def submit_gov_proposal(ethermint, tmp_path, **kwargs):
+    proposal = tmp_path / "proposal.json"
+    proposal_src = {
+        "title": "title",
+        "summary": "summary",
+        "deposit": "2aphoton",
+        **kwargs,
+    }
+    proposal.write_text(json.dumps(proposal_src))
+    rsp = ethermint.cosmos_cli().submit_gov_proposal(proposal, from_="community")
+    assert rsp["code"] == 0, rsp["raw_log"]
+    approve_proposal(ethermint, rsp)
+    print("check params have been updated now")
+
+
 class ContractAddress(rlp.Serializable):
     fields = [
         ("from", rlp.sedes.Binary()),

@@ -33,6 +33,7 @@ import (
 	"github.com/evmos/ethermint/x/evm/keeper"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
+	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	feemarkettypes "github.com/evmos/ethermint/x/feemarket/types"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -119,36 +120,73 @@ func (suite *StateTransitionTestSuite) registerHeader(header tmtypes.Header) {
 }
 
 func (suite *StateTransitionTestSuite) TestGetHashFn() {
-	height := uint64(10)
+	height := uint64(evmtypes.DefaultHeaderHashNum + 2)
 	header := makeRandHeader(height)
 	hash := header.Hash()
 
 	testCases := []struct {
 		msg      string
 		height   uint64
-		malleate func(height uint64)
+		malleate func(int64)
 		expHash  common.Hash
 	}{
 		{
-			"header not found",
+			"use cached header hash",
 			height,
-			func(height uint64) {},
-			common.Hash{},
+			func(_ int64) {
+				suite.Ctx = suite.Ctx.WithHeaderHash(hash)
+			},
+			common.BytesToHash(hash),
 		},
 		{
-			"header found",
-			height,
-			func(height uint64) {
-				suite.Ctx = suite.Ctx.WithBlockHeight(header.Height).WithHeaderHash(header.Hash())
+			"header after sdk50 found",
+			height - 1,
+			func(height int64) {
+				suite.Ctx = suite.Ctx.WithBlockHeight(height).WithHeaderHash(header.Hash())
 				suite.App.EvmKeeper.SetHeaderHash(suite.Ctx)
 			},
 			common.BytesToHash(hash),
+		},
+		{
+			"header before sdk50 found",
+			height - 1,
+			func(height int64) {
+				suite.App.StakingKeeper.SetHistoricalInfo(suite.Ctx, height, &stakingtypes.HistoricalInfo{
+					Header: *header.ToProto(),
+				})
+			},
+			common.BytesToHash(hash),
+		},
+		{
+			"header in context not found with current height",
+			height,
+			func(_ int64) {},
+			common.Hash{},
+		},
+		{
+			"height greater than current height",
+			height + 1,
+			func(_ int64) {},
+			common.Hash{},
+		},
+		{
+			"height less than header hash num range",
+			height - evmtypes.DefaultHeaderHashNum - 1,
+			func(_ int64) {},
+			common.Hash{},
+		},
+		{
+			"header not found in stores",
+			height - 1,
+			func(_ int64) {},
+			common.Hash{},
 		},
 	}
 	for _, tc := range testCases {
 		suite.Run(fmt.Sprintf("Case %s", tc.msg), func() {
 			suite.SetupTest() // reset
-			tc.malleate(tc.height)
+			tc.malleate(int64(tc.height))
+			suite.Ctx = suite.Ctx.WithBlockHeight(header.Height)
 			hash := suite.App.EvmKeeper.GetHashFn(suite.Ctx)(tc.height)
 			suite.Require().Equal(tc.expHash, hash)
 		})

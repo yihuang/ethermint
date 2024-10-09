@@ -63,7 +63,6 @@
         evm: {
           params: {
             evm_denom: 'aphoton',
-            header_hash_num: 2,
           },
         },
         gov: {
