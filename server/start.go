@@ -20,11 +20,9 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"net/http"
 	"os"
 	"path/filepath"
 	"runtime/pprof"
-	"time"
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
@@ -419,10 +417,7 @@ func startInProcess(svrCtx *server.Context, clientCtx client.Context, opts Start
 		idxer = indexer.NewKVIndexer(idxDB, idxLogger, clientCtx)
 		indexerService := NewEVMIndexerService(idxer, clientCtx.Client.(rpcclient.Client), config.JSONRPC.AllowIndexerGap)
 		indexerService.SetLogger(servercmtlog.CometLoggerWrapper{Logger: idxLogger})
-
-		g.Go(func() error {
-			return indexerService.Start()
-		})
+		go indexerService.Start()
 	}
 
 	if config.API.Enable || config.JSONRPC.Enable {
@@ -443,30 +438,12 @@ func startInProcess(svrCtx *server.Context, clientCtx client.Context, opts Start
 	if err != nil {
 		return err
 	}
-	if grpcSrv != nil {
-		defer grpcSrv.GracefulStop()
-	}
 
-	apiSrv := startAPIServer(ctx, svrCtx, clientCtx, g, config.Config, app, grpcSrv, metrics)
-	if apiSrv != nil {
-		defer apiSrv.Close()
-	}
+	startAPIServer(ctx, svrCtx, clientCtx, g, config.Config, app, grpcSrv, metrics)
 
-	clientCtx, httpSrv, httpSrvDone, err := startJSONRPCServer(svrCtx, clientCtx, g, config, genDocProvider, idxer, app)
-	if httpSrv != nil {
-		defer func() {
-			shutdownCtx, cancelFn := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancelFn()
-			if err := httpSrv.Shutdown(shutdownCtx); err != nil {
-				logger.Error("HTTP server shutdown produced a warning", "error", err.Error())
-			} else {
-				logger.Info("HTTP server shut down, waiting 5 sec")
-				select {
-				case <-time.Tick(5 * time.Second):
-				case <-httpSrvDone:
-				}
-			}
-		}()
+	clientCtx, err = startJSONRPCServer(ctx, svrCtx, clientCtx, g, config, genDocProvider, idxer, app)
+	if err != nil {
+		return err
 	}
 
 	// At this point it is safe to block the process if we're in query only mode as
@@ -619,9 +596,9 @@ func startAPIServer(
 	app types.Application,
 	grpcSrv *grpc.Server,
 	metrics *telemetry.Metrics,
-) *api.Server {
+) {
 	if !svrCfg.API.Enable {
-		return nil
+		return
 	}
 
 	apiSrv := api.New(clientCtx, svrCtx.Logger.With("server", "api"), grpcSrv)
@@ -634,10 +611,10 @@ func startAPIServer(
 	g.Go(func() error {
 		return apiSrv.Start(ctx, svrCfg)
 	})
-	return apiSrv
 }
 
 func startJSONRPCServer(
+	stdCtx context.Context,
 	svrCtx *server.Context,
 	clientCtx client.Context,
 	g *errgroup.Group,
@@ -645,7 +622,7 @@ func startJSONRPCServer(
 	genDocProvider node.GenesisDocProvider,
 	idxer ethermint.EVMTxIndexer,
 	app types.Application,
-) (ctx client.Context, httpSrv *http.Server, httpSrvDone chan struct{}, err error) {
+) (ctx client.Context, err error) {
 	ctx = clientCtx
 	if !config.JSONRPC.Enable {
 		return
@@ -653,19 +630,16 @@ func startJSONRPCServer(
 
 	txApp, ok := app.(AppWithPendingTxStream)
 	if !ok {
-		return ctx, httpSrv, httpSrvDone, fmt.Errorf("json-rpc server requires AppWithPendingTxStream")
+		return ctx, fmt.Errorf("json-rpc server requires AppWithPendingTxStream")
 	}
 
 	genDoc, err := genDocProvider()
 	if err != nil {
-		return ctx, httpSrv, httpSrvDone, err
+		return ctx, err
 	}
 
 	ctx = clientCtx.WithChainID(genDoc.ChainID)
-	g.Go(func() error {
-		httpSrv, httpSrvDone, err = StartJSONRPC(svrCtx, clientCtx, g, &config, idxer, txApp)
-		return err
-	})
+	_, err = StartJSONRPC(stdCtx, svrCtx, clientCtx, g, &config, idxer, txApp)
 	return
 }
 

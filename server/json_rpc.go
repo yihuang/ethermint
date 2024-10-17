@@ -16,6 +16,7 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"time"
@@ -47,18 +48,20 @@ type AppWithPendingTxStream interface {
 }
 
 // StartJSONRPC starts the JSON-RPC server
-func StartJSONRPC(srvCtx *server.Context,
+func StartJSONRPC(
+	ctx context.Context,
+	srvCtx *server.Context,
 	clientCtx client.Context,
 	g *errgroup.Group,
 	config *config.Config,
 	indexer ethermint.EVMTxIndexer,
 	app AppWithPendingTxStream,
-) (*http.Server, chan struct{}, error) {
+) (*http.Server, error) {
 	logger := srvCtx.Logger.With("module", "geth")
 
 	evtClient, ok := clientCtx.Client.(rpcclient.EventsClient)
 	if !ok {
-		return nil, nil, fmt.Errorf("client %T does not implement EventsClient", clientCtx.Client)
+		return nil, fmt.Errorf("client %T does not implement EventsClient", clientCtx.Client)
 	}
 
 	var rpcStream *stream.RPCStream
@@ -73,7 +76,7 @@ func StartJSONRPC(srvCtx *server.Context,
 	}
 
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create rpc streams after %d attempts: %w", MaxRetry, err)
+		return nil, fmt.Errorf("failed to create rpc streams after %d attempts: %w", MaxRetry, err)
 	}
 
 	app.RegisterPendingTxListener(rpcStream.ListenPendingTx)
@@ -104,7 +107,7 @@ func StartJSONRPC(srvCtx *server.Context,
 				"namespace", api.Namespace,
 				"service", api.Service,
 			)
-			return nil, nil, err
+			return nil, err
 		}
 	}
 
@@ -128,12 +131,27 @@ func StartJSONRPC(srvCtx *server.Context,
 
 	ln, err := Listen(httpSrv.Addr, config)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	g.Go(func() error {
 		srvCtx.Logger.Info("Starting JSON-RPC server", "address", config.JSONRPC.Address)
-		if err := httpSrv.Serve(ln); err != nil {
+		errCh := make(chan error)
+		go func() {
+			errCh <- httpSrv.Serve(ln)
+		}()
+
+		// Start a blocking select to wait for an indication to stop the server or that
+		// the server failed to start properly.
+		select {
+		case <-ctx.Done():
+			// The calling process canceled or closed the provided context, so we must
+			// gracefully stop the gRPC server.
+			logger.Info("stopping JSON-RPC server...", "address", config.JSONRPC.Address)
+			shutdownCtx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+			httpSrv.Shutdown(shutdownCtx)
+
+		case err := <-errCh:
 			if err == http.ErrServerClosed {
 				close(httpSrvDone)
 			}
@@ -148,5 +166,5 @@ func StartJSONRPC(srvCtx *server.Context,
 
 	wsSrv := rpc.NewWebsocketsServer(clientCtx, srvCtx.Logger, rpcStream, config)
 	wsSrv.Start()
-	return httpSrv, httpSrvDone, nil
+	return httpSrv, nil
 }
