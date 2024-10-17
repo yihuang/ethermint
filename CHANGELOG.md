@@ -72,7 +72,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (rpc) [#534](https://github.com/crypto-org-chain/ethermint/pull/534), [#540](https://github.com/crypto-org-chain/ethermint/pull/540) Fix opBlockhash when no block header in abci request.
 * (rpc) [#536](https://github.com/crypto-org-chain/ethermint/pull/536) Fix validate basic after transaction conversion with raw field.
 * (cli) [#537](https://github.com/crypto-org-chain/ethermint/pull/537) Fix unsuppored sign mode SIGN_MODE_TEXTUAL for bank transfer.
-* (cli) [#]() Fix graceful shutdown.
+* (cli) [#543](https://github.com/crypto-org-chain/ethermint/pull/543) Fix graceful shutdown.
 
 ### Improvements
 
