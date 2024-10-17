@@ -148,8 +148,10 @@ func StartJSONRPC(
 			// The calling process canceled or closed the provided context, so we must
 			// gracefully stop the gRPC server.
 			logger.Info("stopping JSON-RPC server...", "address", config.JSONRPC.Address)
-			shutdownCtx, _ := context.WithTimeout(context.Background(), 10*time.Second)
-			httpSrv.Shutdown(shutdownCtx)
+			if err := httpSrv.Shutdown(context.Background()); err != nil {
+				logger.Error("failed to shutdown JSON-RPC server", "error", err.Error())
+			}
+			return ln.Close()
 
 		case err := <-errCh:
 			if err == http.ErrServerClosed {

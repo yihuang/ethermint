@@ -417,7 +417,11 @@ func startInProcess(svrCtx *server.Context, clientCtx client.Context, opts Start
 		idxer = indexer.NewKVIndexer(idxDB, idxLogger, clientCtx)
 		indexerService := NewEVMIndexerService(idxer, clientCtx.Client.(rpcclient.Client), config.JSONRPC.AllowIndexerGap)
 		indexerService.SetLogger(servercmtlog.CometLoggerWrapper{Logger: idxLogger})
-		go indexerService.Start()
+		go func() {
+			if err := indexerService.Start(); err != nil {
+				logger.Error("failed to start evm indexer service", "error", err.Error())
+			}
+		}()
 	}
 
 	if config.API.Enable || config.JSONRPC.Enable {
