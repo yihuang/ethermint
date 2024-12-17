@@ -312,7 +312,7 @@ func CheckAndSetEthSenderNonce(
 	return nil
 }
 
-// DetectContractCreationBatchTx returns error if same same transaction appear after contract creation tx in the same
+// DetectContractCreationBatchTx returns error if same sender transaction appear after contract creation tx in the same
 // batch
 func DetectContractCreationBatchTx(ctx sdk.Context, tx sdk.Tx) error {
 	if !ctx.IsCheckTx() {
