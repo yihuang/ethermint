@@ -1,6 +1,13 @@
 import json
 
-from .utils import ADDRS, CONTRACTS, build_batch_tx, contract_address, build_batch_tx_signed, sign_transaction
+from .utils import (
+    ADDRS,
+    CONTRACTS,
+    KEYS,
+    build_batch_tx_signed,
+    contract_address,
+    sign_transaction,
+)
 
 
 def test_batch_tx(ethermint):
@@ -17,20 +24,23 @@ def test_batch_tx(ethermint):
     deploy_tx = contract.constructor(sender).build_transaction(
         {"from": deployer, "nonce": deploy_nonce}
     )
-    contract = w3.eth.contract(address=contract_address(deployer, deploy_nonce), abi=info["abi"])
+    contract = w3.eth.contract(
+        address=contract_address(deployer, deploy_nonce), abi=info["abi"]
+    )
     transfer_tx1 = contract.functions.transfer(recipient, 1000).build_transaction(
         {"from": sender, "nonce": nonce, "gas": 200000}
     )
     transfer_tx2 = contract.functions.transfer(recipient, 1000).build_transaction(
-        {"from": sender, "nonce": nonce+1, "gas": 200000}
+        {"from": sender, "nonce": nonce + 1, "gas": 200000}
     )
 
     cosmos_tx, tx_hashes = build_batch_tx_signed(
-        w3, cli, [
+        cli,
+        [
             sign_transaction(w3, deploy_tx, KEYS["validator"]),
             sign_transaction(w3, transfer_tx1, KEYS["signer1"]),
-            sign_transaction(w3, transfer_tx2, KEYS['signer1']),
-        ]
+            sign_transaction(w3, transfer_tx2, KEYS["signer1"]),
+        ],
     )
     rsp = cli.broadcast_tx_json(cosmos_tx)
     assert rsp["code"] == 0, rsp["raw_log"]
