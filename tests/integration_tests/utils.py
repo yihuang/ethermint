@@ -32,6 +32,7 @@ ADDRS = {name: account.address for name, account in ACCOUNTS.items()}
 ETHERMINT_ADDRESS_PREFIX = "ethm"
 TEST_CONTRACTS = {
     "TestERC20A": "TestERC20A.sol",
+    "TestERC20Owner": "TestERC20Owner.sol",
     "Greeter": "Greeter.sol",
     "BurnGas": "BurnGas.sol",
     "TestChainID": "ChainID.sol",
