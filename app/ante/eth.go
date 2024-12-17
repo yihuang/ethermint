@@ -312,8 +312,8 @@ func CheckAndSetEthSenderNonce(
 	return nil
 }
 
-// DetectContractCreationBatchTx returns true if the transaction is a batch transaction that includes a contract
-// creation
+// DetectContractCreationBatchTx returns error if same same transaction appear after contract creation tx in the same
+// batch
 func DetectContractCreationBatchTx(ctx sdk.Context, tx sdk.Tx) error {
 	if !ctx.IsCheckTx() {
 		// only check in mempool logic
