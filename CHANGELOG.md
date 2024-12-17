@@ -79,7 +79,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (rpc) [#558](https://github.com/crypto-org-chain/ethermint/pull/558) New tracer in predecessors to trace balance correctly when `debug_traceTransaction`.
 * (rpc) [#559](https://github.com/crypto-org-chain/ethermint/pull/559) Use basefee of transaction height instead of minus one height when `debug_traceTransaction`.
 * (rpc) [#562](https://github.com/crypto-org-chain/ethermint/pull/562) Fix nil pointer panic with legacy transaction format.
-* (ante) [#]() Disallow same sender tx appear after contract creation in the same batch tx.
+* (ante) [#566](https://github.com/crypto-org-chain/ethermint/pull/566) Disallow same sender tx appear after contract creation in the same batch tx.
 
 ### Improvements
 
