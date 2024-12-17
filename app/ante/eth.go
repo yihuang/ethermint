@@ -311,3 +311,38 @@ func CheckAndSetEthSenderNonce(
 
 	return nil
 }
+
+// DetectContractCreationBatchTx returns true if the transaction is a batch transaction that includes a contract
+// creation
+func DetectContractCreationBatchTx(ctx sdk.Context, tx sdk.Tx) error {
+	if !ctx.IsCheckTx() {
+		// only check in mempool logic
+		return nil
+	}
+
+	if len(tx.GetMsgs()) <= 1 {
+		return nil
+	}
+
+	senders := make(map[string]struct{})
+	for _, msg := range tx.GetMsgs() {
+		msgEthTx, ok := msg.(*evmtypes.MsgEthereumTx)
+		if !ok {
+			return errorsmod.Wrapf(errortypes.ErrUnknownRequest, "invalid message type %T, expected %T", msg, (*evmtypes.MsgEthereumTx)(nil))
+		}
+
+		sender := string(msgEthTx.GetSender().Bytes())
+		if _, ok := senders[sender]; ok {
+			return errorsmod.Wrapf(
+				errortypes.ErrInvalidRequest,
+				"same sender included after contract creation in the batch transaction",
+			)
+		}
+
+		if msgEthTx.AsTransaction().To() == nil {
+			senders[sender] = struct{}{}
+		}
+	}
+
+	return nil
+}

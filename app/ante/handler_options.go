@@ -149,6 +149,11 @@ func newEthAnteHandler(options HandlerOptions) sdk.AnteHandler {
 			return ctx, err
 		}
 
+		// reject contract creation tx in batch tx
+		if err := DetectContractCreationBatchTx(ctx, tx); err != nil {
+			return ctx, err
+		}
+
 		extraDecorators := options.ExtraDecorators
 		if options.PendingTxListener != nil {
 			extraDecorators = append(extraDecorators, newTxListenerDecorator(options.PendingTxListener))
